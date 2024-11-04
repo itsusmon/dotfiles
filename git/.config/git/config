@@ -1,0 +1,13 @@
+[user]
+  name = Usmon Abdurakhmanov
+  email = heyitsusmon@gmail.com
+[commit]
+  gpgsign = false
+[core]
+  autocrlf = input
+  editor = nvim -f
+[init]
+  defaultBranch = main
+[diff]
+  ignorewhitespace = true
+  
