@@ -1,0 +1,141 @@
+{
+  "layer": "top",
+  "output": ["eDP-1"],
+  "position": "top",
+  "modules-left": [
+    "clock",
+    "cpu",
+    "memory",
+    "custom/updates"
+  ],
+  "modules-center": [
+    "hyprland/workspaces"
+  ],
+  "modules-right": [
+    "network",
+    "pulseaudio",
+    "backlight",
+    "battery"
+  ],
+  
+  "clock": {
+    "tooltip": true,
+    "format": "{:%R}",
+    "format-alt": "{:%a %d %b %Y %H:%M:%S}",
+    "tooltip-format": "<tt>{calendar}</tt>",
+    "interval": 1,
+    "calendar": {
+      "mode"          : "month",
+      "mode-mon-col"  : 3,
+      "format": {
+        "months":     "<span color='#ffead3'><b>{}</b></span>",
+	"days":       "<span color='#ecc6d9'><b>{}</b></span>",
+	"weeks":      "<span color='#99ffdd'><b>W{}</b></span>",
+	"weekdays":   "<span color='#ffcc66'><b>{}</b></span>",
+	"today":      "<span color='#ff6699'><b><u>{}</u></b></span>"
+      }
+    },
+    "actions":  {
+      "on-click-right": "mode"
+    }
+  },
+
+  "cpu": {
+    "interval": 1,
+    "format": "{usage}% ",
+    "format-alt": "{avg_frequency}GHz "
+  },
+  
+  "memory": {
+    "interval": 1,
+    "format": "{percentage}% ",
+    "format-alt": "{used:0.1f}G/{total:0.1f}GB ",
+    "tooltip": true,
+    "tooltip-format": "RAM:\nUsage: {percentage}%\nUsed: {used} GB\nAvailable: {avail} GB\nTotal: {total} GB\n\nSWAP:\nUsage: {swapPercentage}%\nUsed: {swapUsed} GB\nAvailable: {swapAvail} GB\nTotal: {swapTotal} GB"
+  },
+
+  "custom/updates": {
+    "exec": "bash $HOME/.config/waybar/scripts/dnf-updates.sh",
+    "on-click-right": "bash $HOME/.config/waybar/scripts/dnf-updates.sh",
+    "on-click": "swaymsg exec 'kitty -e sudo dnf update'",
+    "interval": 900,
+    "return-type": "json",
+    "format": "{icon}",
+    "format-alt": "{icon} {}",
+    "format-icons": {
+      "has-updates": "",
+      "updated": ""
+    }
+  },
+  "hyprland/workspaces": {
+    // "format": "{icon}",
+    "on-click": "activate",
+    "on-scroll-up": "hyprctl dispatch workspace e-1",
+    "on-scroll-down": "hyprctl dispatch workspace e+1",
+    "format-icons": {
+      "active": "",
+      "urgent": "",
+      "default": ""
+    },
+    "sort-by-number": true
+  },
+  
+  "network": {
+    "format": "{icon}",
+    "on-click": "kitty -e 'nmtui'",
+    "format-alt": "{essid}  ({signalStrength}%)  {icon}",
+    "format-alt-click": "click-right",
+    "format-icons": {
+      "wifi": ["󰤯","󰤟", "󰤢" ,"󰤥", "󰤨"],
+      "ethernet": ["󰈀"],
+      "disconnected": ["󰤮"]
+    },
+    "interval": 1,
+    "tooltip": true,
+    "tooltip-format": "{ifname} via {gwaddr}",
+    "tooltip-format-wifi": "Network Status\nIP: {ipaddr}\nInterface: {ifname}\nSSID: {essid}\nSignal Strength: {signalStrength}%\nLink Speed: {bandwidthTotalBytes}",
+    "tooltip-format-ethernet": "{ifname} ",
+    "tooltip-format-disconnected": "Disconnected"
+  },
+  
+  "pulseaudio": {
+    "format": "{volume}% {icon}",
+    "format-bluetooth": "{volume}% {icon} {format_source}",
+    "format-bluetooth-muted": " {icon} {format_source}",
+    "format-muted": "0% {icon}",
+    "format-source": "{volume}% ",
+    "format-source-muted": "",
+    "format-icons": {
+      "headphone": "",
+      "hands-free": "",
+      "headset": "",
+      "phone": "",
+      "portable": "",
+      "car": "",
+      "default": ["", "", ""]
+    },
+    "on-click": "pavucontrol",
+    "reverse-scrolling": true
+  },
+  
+  "backlight": {
+    "format": "{percent}% {icon}",
+    "format-icons": ["", "", "", "", "", "", "", "", ""],
+    "tooltip": false,
+    "reverse-scrolling": true
+  },
+
+  "battery": {
+    "interval": 10,
+    "states": {
+      "warning": 30,
+      "critical": 15
+    },
+    "format": "{capacity}% {icon}",
+    "format-alt": "{time} {icon}",
+    "format-charging": "{capacity}% 󱐋",
+    "format-icons": ["󰂎", "󰁺", "󰁻", "󰁼", "󰁽", "󰁾", "󰁿", "󰂀", "󰂁", "󰂂", "󰁹"],
+    "tooltip": true,
+    "tooltip-format": "Remaining: {capacity}%\n{timeTo}\nHealth: {health}%\nPower: {power} watts"
+  }
+}
