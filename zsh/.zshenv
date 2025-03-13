@@ -13,4 +13,4 @@ ANDROID_USER_HOME="${HOME}/.android"
 ANDROID_HOME="${ANDROID_USER_HOME}/sdk"
 ANDROID_AVD_HOME="${ANDROID_USER_HOME}/avd"
 
-PATH="${PATH}:${XDG_DATA_HOME}/bin:${JAVA_HOME}/bin:${ANDROID_HOME}/emulator:${ANDROID_HOME}/platform-tools"
+PATH="${PATH}:${XDG_DATA_HOME}/bin:${ANDROID_HOME}/emulator:$HOME/.maestro/bin"

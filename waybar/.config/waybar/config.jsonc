@@ -115,6 +115,7 @@
       "default": ["", "", ""]
     },
     "on-click": "pavucontrol",
+    "on-click-right": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",
     "reverse-scrolling": true
   },
   
