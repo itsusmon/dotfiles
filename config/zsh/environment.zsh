@@ -3,6 +3,14 @@
 #  (loaded early, before anything that needs binaries on PATH)
 # ============================================================================
 
+# --- XDG Base Directories ---
+# macOS doesn't set these; export them explicitly so tools that honor XDG put
+# their files under these dirs instead of cluttering $HOME.
+export XDG_CONFIG_HOME="$HOME/.config"
+export XDG_DATA_HOME="$HOME/.local/share"
+export XDG_STATE_HOME="$HOME/.local/state"
+export XDG_CACHE_HOME="$HOME/.cache"
+
 # --- Default editor ---
 export EDITOR='nvim'
 export VISUAL='nvim'
