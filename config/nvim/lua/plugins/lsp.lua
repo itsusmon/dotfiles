@@ -22,17 +22,11 @@ return {
   },
 
   -- ── Mason-LSPConfig (Bridge) ────────────────────────────────
+  -- Declared here but configured from nvim-lspconfig below, so the
+  -- vim.lsp.config() overrides are registered before servers are enabled.
   {
     'williamboman/mason-lspconfig.nvim',
     dependencies = { 'williamboman/mason.nvim' },
-    opts = {
-      ensure_installed = {
-        'lua_ls',
-        'pyright',
-        'ts_ls',
-      },
-      automatic_installation = true,
-    },
   },
 
   -- ── LSPConfig ───────────────────────────────────────────────
@@ -44,7 +38,6 @@ return {
       'hrsh7th/cmp-nvim-lsp',
     },
     config = function()
-      local lspconfig = require('lspconfig')
       local cmp_lsp = require('cmp_nvim_lsp')
 
       -- Enhanced capabilities from nvim-cmp
@@ -99,71 +92,59 @@ return {
         end,
       })
 
-      -- Server configurations
-      -- Use mason-lspconfig handlers for automatic setup
-      require('mason-lspconfig').setup_handlers({
-        -- Default handler: apply capabilities to all servers
-        function(server_name)
-          lspconfig[server_name].setup({
-            capabilities = capabilities,
-          })
-        end,
+      -- Apply the cmp capabilities to every server by default.
+      vim.lsp.config('*', { capabilities = capabilities })
 
-        -- Lua LS: custom settings for Neovim development
-        ['lua_ls'] = function()
-          lspconfig.lua_ls.setup({
-            capabilities = capabilities,
-            settings = {
-              Lua = {
-                runtime = { version = 'LuaJIT' },
-                workspace = {
-                  checkThirdParty = false,
-                  library = {
-                    vim.env.VIMRUNTIME,
-                    '${3rd}/luv/library',
-                  },
-                },
-                completion = { callSnippet = 'Replace' },
-                diagnostics = {
-                  disable = { 'missing-fields' },
-                },
-                telemetry = { enable = false },
+      -- Per-server overrides, merged onto nvim-lspconfig's shipped configs.
+      vim.lsp.config('lua_ls', {
+        settings = {
+          Lua = {
+            runtime = { version = 'LuaJIT' },
+            workspace = {
+              checkThirdParty = false,
+              library = {
+                vim.env.VIMRUNTIME,
+                '${3rd}/luv/library',
               },
             },
-          })
-        end,
-
-        -- Pyright
-        ['pyright'] = function()
-          lspconfig.pyright.setup({
-            capabilities = capabilities,
-            settings = {
-              python = {
-                analysis = {
-                  typeCheckingMode = 'basic',
-                  autoSearchPaths = true,
-                  useLibraryCodeForTypes = true,
-                },
-              },
+            completion = { callSnippet = 'Replace' },
+            diagnostics = {
+              disable = { 'missing-fields' },
             },
-          })
-        end,
+            telemetry = { enable = false },
+          },
+        },
+      })
 
-        -- TypeScript
-        ['ts_ls'] = function()
-          lspconfig.ts_ls.setup({
-            capabilities = capabilities,
-            settings = {
-              typescript = {
-                inlayHints = {
-                  includeInlayParameterNameHints = 'all',
-                  includeInlayFunctionParameterTypeHints = true,
-                  includeInlayVariableTypeHints = true,
-                },
-              },
+      vim.lsp.config('pyright', {
+        settings = {
+          python = {
+            analysis = {
+              typeCheckingMode = 'basic',
+              autoSearchPaths = true,
+              useLibraryCodeForTypes = true,
             },
-          })
-        end,
+          },
+        },
+      })
+
+      vim.lsp.config('ts_ls', {
+        settings = {
+          typescript = {
+            inlayHints = {
+              includeInlayParameterNameHints = 'all',
+              includeInlayFunctionParameterTypeHints = true,
+              includeInlayVariableTypeHints = true,
+            },
+          },
+        },
+      })
+
+      -- Install the servers and let mason-lspconfig enable them via
+      -- vim.lsp.enable(), which picks up the vim.lsp.config() overrides above.
+      require('mason-lspconfig').setup({
+        ensure_installed = { 'lua_ls', 'pyright', 'ts_ls' },
+        automatic_enable = true,
       })
     end,
   },

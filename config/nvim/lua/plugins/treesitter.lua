@@ -5,6 +5,10 @@
 return {
   {
     'nvim-treesitter/nvim-treesitter',
+    -- Pin to the classic API. The new `main` branch dropped
+    -- `nvim-treesitter.configs` (and indent / incremental_selection),
+    -- which this config relies on.
+    branch = 'master',
     build = ':TSUpdate',
     event = { 'BufReadPre', 'BufNewFile' },
     main = 'nvim-treesitter.configs',
