@@ -118,7 +118,7 @@ fi
 zstyle ':completion:*' matcher-list \
   'm:{a-zA-Z}={A-Za-z}' \
   'r:|[._-]=* r:|=*' \
-  'l:|=* r:|=*'                                              # Case-insensitive + partial-word + substring
+  'l:|=* r:|=*'                                             # Case-insensitive + partial-word + substring
 zstyle ':completion:*' menu select                          # Arrow-key menu
 zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"     # Colored completions
 zstyle ':completion:*' group-name ''                        # Group by category
@@ -141,15 +141,12 @@ precmd_functions+=(vcs_info)
 zstyle ':vcs_info:*' enable git
 # check-for-changes=false avoids running `git status` on every prompt (~5-20ms)
 # The branch name still shows; you just won't see ● for staged/unstaged files
-zstyle ':vcs_info:*' check-for-changes false
+zstyle ':vcs_info:*' check-for-changes true
 zstyle ':vcs_info:git:*' formats ' %F{magenta} %b%f'
 zstyle ':vcs_info:git:*' actionformats ' %F{magenta} %b%f|%F{red}%a%f'
 
 # Single-line prompt: dir + git branch + prompt char
 PROMPT='%F{blue}%~%f${vcs_info_msg_0_} %(?.%F{green}.%F{red})❯%f '
-
-# Right prompt: execution time + timestamp
-RPROMPT='%F{242}%*%f'
 
 # ============================================================================
 #  zmx Integration
