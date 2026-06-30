@@ -3,6 +3,21 @@
 # Config only — private keys live in ~/.ssh and are NEVER tracked in this repo.
 # Add per-host blocks below as you set up machines/keys.
 
+# GitHub: Ed25519 auth key + post-quantum key exchange.
+# Passphrase is cached in the shared ssh-agent for 12h, then re-prompted.
+Host github.com
+    HostName github.com
+    User git
+    IdentityFile ~/.ssh/id_ed25519_github
+    IdentitiesOnly yes
+    # Add to the agent on first use with a 12h lifetime, then auto-remove.
+    AddKeysToAgent 12h
+    # Do NOT persist the passphrase in the macOS keychain — that would make it
+    # permanent and defeat the 12h expiry above.
+    UseKeychain no
+    # Prefer post-quantum key exchange; falls back to classical automatically.
+    KexAlgorithms mlkem768x25519-sha256,sntrup761x25519-sha512@openssh.com,curve25519-sha256,curve25519-sha256@libssh.org
+
 Host *
     # Add keys to the running agent and store passphrases in the macOS keychain.
     AddKeysToAgent yes
