@@ -1,0 +1,104 @@
+# ============================================================================
+#  Ghostty Configuration
+# ============================================================================
+
+# --- Font ---
+font-family = JetBrainsMono Nerd Font Mono
+font-size = 14
+font-thicken = true
+adjust-cell-height = 25%
+
+# --- Cursor ---
+cursor-style = bar
+cursor-style-blink = true
+cursor-opacity = 0.8
+
+# --- Window ---
+window-padding-x = 8
+window-padding-y = 6
+window-decoration = auto
+window-save-state = always
+window-inherit-working-directory = true
+window-inherit-font-size = true
+
+# --- macOS-specific ---
+macos-titlebar-style = transparent
+macos-option-as-alt = true
+macos-window-shadow = true
+
+# --- Shell Integration ---
+# Ghostty auto-injects shell integration for prompt marking, cursor,
+# title, and semantic zones. "detect" auto-picks the right shell.
+shell-integration = detect
+shell-integration-features = cursor,no-sudo,title
+
+# --- Mouse & Selection ---
+mouse-hide-while-typing = true
+copy-on-select = true
+clipboard-trim-trailing-spaces = true
+clipboard-paste-protection = true
+
+# --- Scrollback ---
+scrollback-limit = 10000000
+
+# --- Misc ---
+confirm-close-surface = true
+focus-follows-mouse = false
+unfocused-split-opacity = 0.85
+link-url = true
+bold-color =
+resize-overlay = after-first
+resize-overlay-duration = 500ms
+
+# --- Quick Terminal (Cmd+`) ---
+quick-terminal-position = top
+quick-terminal-animation-duration = 0.15
+quick-terminal-autohide = true
+
+# ============================================================================
+#  Keybindings
+# ============================================================================
+
+# Split management
+keybind = super+d=new_split:right
+keybind = super+shift+d=new_split:down
+keybind = super+shift+enter=toggle_split_zoom
+keybind = super+ctrl+equal=equalize_splits
+
+# Navigate splits with Cmd+Option+Arrow
+keybind = super+alt+arrow_up=goto_split:up
+keybind = super+alt+arrow_down=goto_split:down
+keybind = super+alt+arrow_left=goto_split:left
+keybind = super+alt+arrow_right=goto_split:right
+
+# Resize splits with Cmd+Ctrl+Arrow
+keybind = super+ctrl+arrow_up=resize_split:up,10
+keybind = super+ctrl+arrow_down=resize_split:down,10
+keybind = super+ctrl+arrow_left=resize_split:left,10
+keybind = super+ctrl+arrow_right=resize_split:right,10
+
+# Tabs
+keybind = super+t=new_tab
+keybind = super+w=close_surface
+keybind = super+shift+left_bracket=previous_tab
+keybind = super+shift+right_bracket=next_tab
+keybind = ctrl+tab=next_tab
+keybind = ctrl+shift+tab=previous_tab
+
+# Jump between prompts (shell integration powered)
+keybind = super+arrow_up=jump_to_prompt:-1
+keybind = super+arrow_down=jump_to_prompt:1
+
+# Scrollback
+keybind = super+home=scroll_to_top
+keybind = super+end=scroll_to_bottom
+keybind = super+page_up=scroll_page_up
+keybind = super+page_down=scroll_page_down
+
+# Utility
+keybind = super+k=clear_screen
+keybind = super+shift+p=toggle_command_palette
+keybind = super+enter=toggle_fullscreen
+keybind = super+f=start_search
+keybind = super+shift+comma=reload_config
+keybind = super+comma=open_config
