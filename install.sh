@@ -87,6 +87,13 @@ main() {
     fi
   done < "$MANIFEST"
 
+  # Harden permissions on security-sensitive dirs we may have just created.
+  # SSH and GnuPG refuse to work (or warn loudly) unless their home dir is 0700.
+  local secure_dir
+  for secure_dir in "$HOME/.ssh" "$HOME/.gnupg"; do
+    if [[ -d "$secure_dir" ]]; then chmod 700 "$secure_dir"; fi
+  done
+
   info "Done: $linked linked, $skipped current, $backed backed up"
   if [[ "$backed" -gt 0 ]]; then
     info "Backups: ${BACKUP_DIR/#$HOME/~}"

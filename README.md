@@ -36,9 +36,21 @@ git clone <repo> ~/.dotfiles
 ## Layout
 
 ```
-zshrc, zprofile, bashrc   → ~/.zshrc, ~/.zprofile, ~/.bashrc
-gitconfig                 → ~/.gitconfig
-config/ghostty/config     → ~/.config/ghostty/config
-config/nvim/              → ~/.config/nvim/ (lua config; lazy-lock.json stays app-managed)
-AGENT.md                  → ~/.claude/CLAUDE.md, ~/.gemini/GEMINI.md, ~/.config/opencode/AGENTS.md
+zshrc, zprofile, bashrc       → ~/.zshrc, ~/.zprofile, ~/.bashrc
+gitconfig                     → ~/.gitconfig
+config/git/ignore, attributes → ~/.config/git/ignore, ~/.config/git/attributes
+config/ghostty/config         → ~/.config/ghostty/config
+config/nvim/                  → ~/.config/nvim/ (lua config; lazy-lock.json stays app-managed)
+config/opencode/              → ~/.config/opencode/opencode.jsonc, tui.json
+claude/settings.json          → ~/.claude/settings.json
+gemini/antigravity-cli/...    → ~/.gemini/antigravity-cli/settings.json
+ssh/config                    → ~/.ssh/config
+gnupg/gpg.conf, gpg-agent.conf → ~/.gnupg/gpg.conf, ~/.gnupg/gpg-agent.conf
+AGENT.md                      → ~/.claude/CLAUDE.md, ~/.gemini/GEMINI.md, ~/.config/opencode/AGENTS.md
 ```
+
+## Secrets
+
+Only **config** is tracked, never key material. `install.sh` forces `~/.ssh` and `~/.gnupg`
+to `0700`, and [`.gitignore`](.gitignore) refuses to stage private keys, keyrings, and GnuPG
+runtime state even if one is ever copied into the repo by accident.

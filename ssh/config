@@ -1,0 +1,12 @@
+# ~/.ssh/config — global SSH client settings.
+#
+# Config only — private keys live in ~/.ssh and are NEVER tracked in this repo.
+# Add per-host blocks below as you set up machines/keys.
+
+Host *
+    # Add keys to the running agent and store passphrases in the macOS keychain.
+    AddKeysToAgent yes
+    UseKeychain yes
+    # Keep idle connections from dropping.
+    ServerAliveInterval 60
+    ServerAliveCountMax 3

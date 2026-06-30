@@ -1,0 +1,23 @@
+# 1. Global default: handle as text and force LF
+* text=auto eol=lf
+
+# 2. Source code and config (explicitly LF)
+*.java text eol=lf
+*.kt text eol=lf
+*.xml text eol=lf
+*.gradle text eol=lf
+*.properties text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+
+# 3. Shell scripts and Hooks (Crucial for execution)
+*.sh text eol=lf
+hooks/* text eol=lf
+scripts/* text eol=lf
+
+# 4. Binary files (Do not touch line endings)
+*.png binary
+*.jpg binary
+*.gif binary
+*.jar binary
+*.pdf binary

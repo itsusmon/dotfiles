@@ -1,2 +1,38 @@
 .backups/
 .DS_Store
+
+# ── Never commit secrets ──────────────────────────────────────────────────
+# Defense in depth: even if a key file is ever copied into this repo by
+# accident, git will refuse to stage it. Only config files are tracked.
+
+# Private keys / certificates (any location)
+*.key
+*.pem
+*.p12
+*.pfx
+*.asc
+id_rsa*
+id_dsa*
+id_ecdsa*
+id_ed25519*
+*_rsa
+*_dsa
+*_ecdsa
+*_ed25519
+
+# GnuPG key material and runtime state
+gnupg/private-keys-v1.d/
+gnupg/openpgp-revocs.d/
+gnupg/*.gpg
+gnupg/*.kbx
+gnupg/*.kbx~
+gnupg/trustdb.gpg
+gnupg/random_seed
+gnupg/.gpg-v21-migrated
+gnupg/S.*
+
+# SSH key material and host state
+ssh/id_*
+ssh/*.pub
+ssh/known_hosts*
+ssh/authorized_keys
