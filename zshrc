@@ -5,6 +5,10 @@
 # --- Default Editor ---
 export EDITOR='nvim'
 export VISUAL='nvim'
+
+# --- GPG (commit signing): point the agent's prompt at the active terminal ---
+export GPG_TTY=${TTY:-$(tty)}
+
 # --- History ---
 HISTFILE=~/.zsh_history
 HISTSIZE=50000
