@@ -37,8 +37,7 @@ git clone <repo> ~/.dotfiles
 
 ```
 zshrc, zprofile, bashrc       → ~/.zshrc, ~/.zprofile, ~/.bashrc
-gitconfig                     → ~/.gitconfig
-config/git/ignore, attributes → ~/.config/git/ignore, ~/.config/git/attributes
+config/git/                   → ~/.config/git/config, ignore, attributes
 config/ghostty/config         → ~/.config/ghostty/config
 config/nvim/                  → ~/.config/nvim/ (lua config; lazy-lock.json stays app-managed)
 config/opencode/              → ~/.config/opencode/opencode.jsonc, tui.json
