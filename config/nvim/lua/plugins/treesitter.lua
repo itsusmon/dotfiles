@@ -39,6 +39,14 @@ return {
       end
       refresh()
 
+      -- Set of parsers nvim-treesitter can actually install. Used to skip
+      -- plugin UI filetypes (notify, noice, lazy, ...) that have no parser,
+      -- which otherwise trigger "skipping unsupported language" warnings.
+      local available = {}
+      for _, lang in ipairs(TS.get_available()) do
+        available[lang] = true
+      end
+
       -- Enable treesitter features for a buffer (no-op if the parser is missing).
       local function enable(buf, lang)
         if not vim.api.nvim_buf_is_valid(buf) then return end
@@ -80,7 +88,7 @@ return {
         group = vim.api.nvim_create_augroup('user_treesitter', { clear = true }),
         callback = function(ev)
           local lang = vim.treesitter.language.get_lang(ev.match)
-          if not lang then return end
+          if not lang or not available[lang] then return end
 
           if not installed[lang] then
             refresh() -- maybe a background install just finished
