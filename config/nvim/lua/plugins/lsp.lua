@@ -6,7 +6,7 @@ return {
 
   -- ── Mason (LSP/DAP/Linter Installer) ────────────────────────
   {
-    'williamboman/mason.nvim',
+    'mason-org/mason.nvim',
     cmd = 'Mason',
     build = ':MasonUpdate',
     opts = {
@@ -25,8 +25,8 @@ return {
   -- Declared here but configured from nvim-lspconfig below, so the
   -- vim.lsp.config() overrides are registered before servers are enabled.
   {
-    'williamboman/mason-lspconfig.nvim',
-    dependencies = { 'williamboman/mason.nvim' },
+    'mason-org/mason-lspconfig.nvim',
+    dependencies = { 'mason-org/mason.nvim' },
   },
 
   -- ── LSPConfig ───────────────────────────────────────────────
@@ -34,7 +34,7 @@ return {
     'neovim/nvim-lspconfig',
     event = { 'BufReadPre', 'BufNewFile' },
     dependencies = {
-      'williamboman/mason-lspconfig.nvim',
+      'mason-org/mason-lspconfig.nvim',
       'hrsh7th/cmp-nvim-lsp',
     },
     config = function()
