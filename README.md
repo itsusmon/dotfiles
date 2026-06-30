@@ -36,16 +36,16 @@ git clone <repo> ~/.dotfiles
 ## Layout
 
 ```
-zshrc, zprofile, bashrc       → ~/.zshrc, ~/.zprofile, ~/.bashrc
-config/git/                   → ~/.config/git/config, ignore, attributes
-config/ghostty/config         → ~/.config/ghostty/config
-config/nvim/                  → ~/.config/nvim/ (lua config; lazy-lock.json stays app-managed)
-config/opencode/              → ~/.config/opencode/opencode.jsonc, tui.json
-claude/settings.json          → ~/.claude/settings.json
-gemini/antigravity-cli/...    → ~/.gemini/antigravity-cli/settings.json
-ssh/config                    → ~/.ssh/config
+zshenv, zshrc, zprofile        → ~/.zshenv, ~/.zshrc, ~/.zprofile
+config/zsh/                    → ~/.config/zsh/*.zsh (sourced by ~/.zshrc)
+config/git/                    → ~/.config/git/config, ignore, attributes
+config/ghostty/config          → ~/.config/ghostty/config
+config/nvim/                   → ~/.config/nvim/ (lua config; lazy-lock.json stays app-managed)
+config/opencode/               → ~/.config/opencode/opencode.jsonc, tui.json
+gradle/gradle.properties       → ~/.gradle/gradle.properties
+ssh/config                     → ~/.ssh/config
 gnupg/gpg.conf, gpg-agent.conf → ~/.gnupg/gpg.conf, ~/.gnupg/gpg-agent.conf
-AGENT.md                      → ~/.claude/CLAUDE.md, ~/.gemini/GEMINI.md, ~/.config/opencode/AGENTS.md
+AGENT.md                       → ~/.claude/CLAUDE.md, ~/.gemini/GEMINI.md, ~/.config/opencode/AGENTS.md
 ```
 
 ## Secrets
