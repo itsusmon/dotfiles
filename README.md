@@ -18,7 +18,7 @@ Each tool has its own README with what it is, why it's used, and how the config 
 | [Gradle](gradle/README.md) | Global JVM / Android build tuning | `gradle/` |
 | [SSH](ssh/README.md) | SSH client config (private keys stay untracked) | `ssh/` |
 | [GnuPG](gnupg/README.md) | GPG signing / encryption defaults (keys untracked) | `gnupg/` |
-| [Agent instructions](AGENT.md) | Shared AI-agent rules (Claude / Gemini / OpenCode) | `AGENT.md` |
+| [Agent instructions](AGENTS.md) | Shared AI-agent rules (Claude / Gemini / OpenCode / Codex) | `AGENTS.md` |
 
 ## How it works
 
@@ -64,7 +64,7 @@ config/opencode/               → ~/.config/opencode/opencode.jsonc, tui.json
 gradle/gradle.properties       → ~/.gradle/gradle.properties
 ssh/config                     → ~/.ssh/config
 gnupg/gpg.conf, gpg-agent.conf → ~/.gnupg/gpg.conf, ~/.gnupg/gpg-agent.conf
-AGENT.md                       → ~/.claude/CLAUDE.md, ~/.gemini/GEMINI.md, ~/.config/opencode/AGENTS.md
+AGENTS.md                      → ~/.claude/CLAUDE.md, ~/.gemini/GEMINI.md, ~/.config/opencode/AGENTS.md, ~/.codex/AGENTS.md, ~/AGENTS.md
 ```
 
 ## Secrets
