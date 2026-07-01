@@ -1,13 +1,44 @@
+;; ============================================================================
 ;; kanata config
-;; Caps Lock: tap -> Escape, hold -> Hyper (Ctrl+Alt+Shift+Cmd).
-;; Every other key is left untouched for the OS (process-unmapped-keys no).
+;; ============================================================================
+;; Caps Lock behaves as:
+;;   - TAP  -> Escape
+;;   - HOLD -> Hyper (Ctrl+Alt+Shift+Cmd)
+;;
+;; While Hyper (Caps) is held:
+;;   - Keys listed in the `launch` layer run an app-launch command.
+;;   - Any OTHER key emits a raw Hyper+<key> chord (usable by other tools).
+;;
+;; App launching uses macOS `open`. kanata runs as a *root* LaunchDaemon with no
+;; GUI session, so launches are wrapped to open in your user's session and run
+;; as your user (uid 501 / usmon), not root:
+;;     launchctl asuser 501 sudo -u usmon open -a <AppName>
+;; (`cmd` needs the cmd_allowed kanata build AND `danger-enable-cmd yes` below.)
+;;
+;; ----------------------------------------------------------------------------
+;; HOW TO ADD A NEW APP LAUNCHER  (Hyper + <key>  ->  open <App>)
+;; ----------------------------------------------------------------------------
+;; Do all four, keeping each key in the SAME COLUMN across the three blocks
+;; (the Nth entry in defsrc lines up with the Nth entry in every deflayer):
+;;
+;;   1. (defsrc)          add the physical key            e.g.  b
+;;   2. (deflayer base)   add its normal binding          e.g.  b
+;;   3. (defalias)        add a launcher alias            e.g.
+;;          browser (cmd launchctl asuser 501 sudo -u usmon open -a Safari)
+;;   4. (deflayer launch) bind the alias at that column   e.g.  @browser
+;;
+;; Then reload:   sudo launchctl kickstart -k system/com.local.kanata
+;; Exact app names live in:  /Applications   (use the name without ".app")
+;; ============================================================================
 
 (defcfg
   process-unmapped-keys no
+  danger-enable-cmd yes
 )
 
+;; Physical keys kanata watches. Add a key here (step 1) to launch on it.
 (defsrc
-  caps
+  caps  ret
 )
 
 (defvar
@@ -16,11 +47,27 @@
 )
 
 (defalias
+  ;; --- App launchers (Hyper + key). Add new ones here (step 3). ---
+  ghostty (cmd launchctl asuser 501 sudo -u usmon open -a Ghostty)
+
+  ;; Hold Caps = Hyper: hold the four modifiers (raw Hyper+key still works)
+  ;; and activate the launch layer for the app-launch bindings above.
+  hyper (multi lctl lalt lsft lmet (layer-while-held launch))
+
   ;; tap-hold-press: pressing another key while Caps is held engages Hyper
-  ;; immediately, so shortcuts fire without waiting out hold-time.
-  cap (tap-hold-press $tap-time $hold-time esc (multi lctl lalt lsft lmet))
+  ;; immediately, so bindings fire without waiting out hold-time.
+  cap (tap-hold-press $tap-time $hold-time esc @hyper)
 )
 
+;; Normal typing layer: every key is its plain self except Caps (step 2).
+;;   caps  ret
 (deflayer base
-  @cap
+  @cap  ret
+)
+
+;; Active only while Caps (Hyper) is held. Bind launchers here (step 4).
+;; `_` = transparent -> falls through to a raw Hyper+<key> chord.
+;;   caps  ret
+(deflayer launch
+  _     @ghostty
 )
