@@ -1,0 +1,210 @@
+" ============================================================
+"  Vim / IdeaVim configuration
+" ------------------------------------------------------------
+"  Mirrors the Neovim setup (~/.config/nvim) as closely as a
+"  plugin-less Vim / IdeaVim environment allows.
+"
+"  Lives at $XDG_CONFIG_HOME/vim/vimrc (~/.config/vim/vimrc), the
+"  third path Vim searches for a vimrc (after ~/.vimrc and
+"  ~/.vim/vimrc — neither of which should exist, or they'd shadow
+"  this one).
+"
+"  This file is the single source of truth for everything that
+"  works in BOTH real Vim and IdeaVim (options + keymaps that
+"  don't depend on a plugin). IdeaVim-specific bindings that map
+"  Neovim's plugin features (Telescope, LSP, Neo-tree, gitsigns)
+"  onto IDE actions live in ~/.config/ideavim/ideavimrc, which
+"  sources this file.
+"
+"  `has('ide')` is true inside IdeaVim and false in real Vim, so
+"  each branch below only runs where it makes sense.
+" ============================================================
+
+" ── Leader (mirrors vim.g.mapleader = ' ') ──────────────────
+let mapleader = " "
+let maplocalleader = " "
+
+" ── Search ──────────────────────────────────────────────────
+set ignorecase
+set smartcase
+set hlsearch
+set incsearch
+
+" ── UI / behaviour common to both ───────────────────────────
+set number
+set relativenumber
+set scrolloff=8
+set sidescrolloff=8
+set noshowmode
+set timeoutlen=300
+set clipboard=unnamed,unnamedplus
+
+" ============================================================
+"  Options that only apply to real Vim
+"  (IdeaVim delegates these to the IDE and would raise E518 for
+"   the ones it doesn't know, so keep them out of its way.)
+" ============================================================
+if !has('ide')
+  syntax on
+  filetype plugin indent on
+
+  " Indentation (2 spaces)
+  set expandtab
+  set shiftwidth=2
+  set softtabstop=2
+  set tabstop=2
+  set smartindent
+  set breakindent
+
+  " Colors — Catppuccin Macchiato, transparent (lets Ghostty blur through).
+  " The scheme lives at ~/.config/vim/colors/catppuccin_macchiato.vim, which
+  " Vim finds because ~/.config/vim is on 'runtimepath' under XDG. silent! so
+  " a missing file never breaks startup.
+  set termguicolors
+  silent! colorscheme catppuccin_macchiato
+
+  " Files: no swap/backup, persistent undo under the XDG state dir
+  " ($XDG_STATE_HOME/vim/undo, falling back to ~/.local/state).
+  set noswapfile
+  set nobackup
+  set undofile
+  let &undodir = expand((!empty($XDG_STATE_HOME) ? $XDG_STATE_HOME : '~/.local/state') . '/vim/undo')
+  if !isdirectory(&undodir)
+    call mkdir(&undodir, 'p', 0700)
+  endif
+
+  " UI
+  set signcolumn=yes
+  set cursorline
+  set mouse=a
+  set nowrap
+  set updatetime=250
+  set completeopt=menu,menuone,noselect
+  set conceallevel=0
+  set pumheight=10
+  set fillchars=eob:\
+  set splitright
+  set splitbelow
+endif
+
+" ============================================================
+"  Keymaps common to both (no plugins required)
+" ============================================================
+
+" ── General ─────────────────────────────────────────────────
+nnoremap <leader>w :w<CR>
+nnoremap <leader>q :q<CR>
+nnoremap <leader>h :nohlsearch<CR>
+
+" ── Window navigation ───────────────────────────────────────
+nnoremap <C-h> <C-w>h
+nnoremap <C-j> <C-w>j
+nnoremap <C-k> <C-w>k
+nnoremap <C-l> <C-w>l
+
+" ── Move selected lines up / down ───────────────────────────
+vnoremap <A-j> :m '>+1<CR>gv=gv
+vnoremap <A-k> :m '<-2<CR>gv=gv
+
+" ── Better defaults ─────────────────────────────────────────
+nnoremap J mzJ`z
+nnoremap <C-d> <C-d>zz
+nnoremap <C-u> <C-u>zz
+nnoremap n nzzzv
+nnoremap N Nzzzv
+
+" ── Visual mode: keep selection after indent ────────────────
+vnoremap < <gv
+vnoremap > >gv
+
+" ============================================================
+"  Real-Vim-only keymaps & autocommands
+" ============================================================
+if !has('ide')
+  " Buffer navigation (IdeaVim uses IDE tabs instead — see .ideavimrc)
+  nnoremap <S-h> :bprevious<CR>
+  nnoremap <S-l> :bnext<CR>
+
+  " ── File explorer (netrw, mirrors Neovim's <leader>e Neo-tree) ──
+  " netrw ships with Vim, so no plugin is needed. Configured as a left
+  " sidebar in tree view; :Lexplore toggles it open/closed.
+  let g:netrw_banner = 0        " hide the help banner
+  let g:netrw_liststyle = 3     " tree listing
+  let g:netrw_winsize = 25      " 25% width (≈ Neo-tree's 35 columns)
+  let g:netrw_browse_split = 4  " open files in the previous (main) window
+  let g:netrw_altv = 1          " vertical splits open to the right
+  let g:netrw_hide = 0          " show dotfiles (Neo-tree: hide_dotfiles=false)
+  nnoremap <silent> <leader>e :Lexplore<CR>
+
+  " ── fzf ─────────────────────────────────────────────────────
+  " fzf is a git install at ~/.fzf, which ships its own Vim plugin. Adding
+  " it to 'runtimepath' gives :FZF, fzf#run() and fzf#wrap(). These maps
+  " mirror the Neovim Telescope <leader>f… finder. In-editor fzf inherits
+  " FZF_DEFAULT_OPTS from the shell, so it already matches the Catppuccin
+  " theme configured in ~/.config/zsh/fzf.zsh.
+  if isdirectory(expand('~/.fzf'))
+    set runtimepath+=~/.fzf
+    " Centered popup, matching the Neovim/Ghostty aesthetic.
+    let g:fzf_layout = { 'window': { 'width': 0.85, 'height': 0.80 } }
+
+    " Files — fzf's built-in walker (fzf#wrap default sink opens the pick,
+    " and honours <C-t>/<C-x>/<C-v> for tab/split/vsplit).
+    nnoremap <silent> <leader>ff :FZF<CR>
+
+    " Buffers
+    function! s:fzf_buffers() abort
+      let l:bufs = filter(range(1, bufnr('$')),
+            \ 'buflisted(v:val) && !empty(bufname(v:val))')
+      call fzf#run(fzf#wrap('buffers', {
+            \ 'source': map(l:bufs, 'fnamemodify(bufname(v:val), ":~:.")'),
+            \ }))
+    endfunction
+    nnoremap <silent> <leader>fb :call <SID>fzf_buffers()<CR>
+
+    " Recent files (:oldfiles)
+    function! s:fzf_history() abort
+      call fzf#run(fzf#wrap('history', {
+            \ 'source': map(filter(copy(v:oldfiles), 'filereadable(expand(v:val))'),
+            \               'fnamemodify(v:val, ":~:.")'),
+            \ }))
+    endfunction
+    nnoremap <silent> <leader>fr :call <SID>fzf_history()<CR>
+
+    " Grep — ripgrep if installed, else grep. Jumps to file:line on <CR>.
+    function! s:fzf_grep_open(line) abort
+      let l:p = split(a:line, ':')
+      execute 'edit +' . l:p[1] . ' ' . fnameescape(l:p[0])
+    endfunction
+    function! s:fzf_grep() abort
+      let l:src = executable('rg')
+            \ ? 'rg --column --line-number --no-heading --smart-case --color=never ""'
+            \ : "grep -rniI --exclude-dir=.git -e '' . 2>/dev/null"
+      call fzf#run({
+            \ 'source':  l:src,
+            \ 'sink':    function('<SID>fzf_grep_open'),
+            \ 'window':  { 'width': 0.85, 'height': 0.80 },
+            \ 'options': ['--delimiter', ':',
+            \             '--preview', 'bat --style=numbers --color=always --highlight-line {2} {1} 2>/dev/null || sed -n {2}p {1}'],
+            \ })
+    endfunction
+    nnoremap <silent> <leader>fg :call <SID>fzf_grep()<CR>
+  endif
+
+  " Brief highlight on yank (Neovim's TextYankPost flash). Deletes only
+  " its own match id so search highlighting is left untouched.
+  function! s:FlashYank() abort
+    let l:id = matchadd('IncSearch', '\%'.line("'[").'l\%>'.(col("'[")-1).'v\%<'.(col("']")+1).'v')
+    call timer_start(200, {-> execute('silent! call matchdelete('.l:id.')')})
+  endfunction
+
+  augroup UserVim
+    autocmd!
+    if exists('##TextYankPost')
+      autocmd TextYankPost * if v:event.operator ==# 'y' | silent! call s:FlashYank() | endif
+    endif
+    " Strip trailing whitespace on save
+    autocmd BufWritePre * let s:v = winsaveview() | keeppatterns %s/\s\+$//e | call winrestview(s:v)
+    " Return to last edit position when reopening a file
+    autocmd BufReadPost * if line("'\"") >= 1 && line("'\"") <= line("$") && &ft !~# 'commit' | execute "normal! g`\"" | endif
+  augroup END
+endif
