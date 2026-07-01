@@ -1,0 +1,26 @@
+;; kanata config
+;; Caps Lock: tap -> Escape, hold -> Hyper (Ctrl+Alt+Shift+Cmd).
+;; Every other key is left untouched for the OS (process-unmapped-keys no).
+
+(defcfg
+  process-unmapped-keys no
+)
+
+(defsrc
+  caps
+)
+
+(defvar
+  tap-time 200
+  hold-time 200
+)
+
+(defalias
+  ;; tap-hold-press: pressing another key while Caps is held engages Hyper
+  ;; immediately, so shortcuts fire without waiting out hold-time.
+  cap (tap-hold-press $tap-time $hold-time esc (multi lctl lalt lsft lmet))
+)
+
+(deflayer base
+  @cap
+)
