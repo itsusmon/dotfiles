@@ -11,17 +11,13 @@
 # careful ordering — so PATH is built in ~/.config/zsh/environment.zsh
 # (sourced from ~/.zshrc, after path_helper runs).
 
-# --- XDG Base Directories ---
+# --- XDG Directories ---
 # macOS doesn't set these; export them explicitly so tools that honor XDG put
 # their files under these dirs instead of cluttering $HOME.
 export XDG_CONFIG_HOME="$HOME/.config"
 export XDG_DATA_HOME="$HOME/.local/share"
 export XDG_STATE_HOME="$HOME/.local/state"
 export XDG_CACHE_HOME="$HOME/.cache"
-
-# --- XDG User Directories (custom; macOS doesn't set these) ---
-# NOTE: on macOS the video folder is ~/Movies, and ~/Templates/~/Videos don't
-# exist by default — these point where you asked regardless.
 export XDG_DESKTOP_DIR="$HOME/Desktop"
 export XDG_DOCUMENTS_DIR="$HOME/Documents"
 export XDG_DOWNLOAD_DIR="$HOME/Downloads"
@@ -52,3 +48,7 @@ unset _java_home_cache
 
 # Disable Claude's built-in servers
 export ENABLE_CLAUDEAI_MCP_SERVERS=false
+
+# Disable Homebrew hints
+export HOMEBREW_NO_ENV_HINTS=1
+. "$HOME/.cargo/env"
