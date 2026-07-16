@@ -1,5 +1,10 @@
 [user]
 	name = Usmonjon Abdurakhmanov
 	email = heyitsusmon@gmail.com
+	signingkey = 745BC7D934A23128CF24C64E7EF78997939A17FD!
 [core]
 	autocrlf = input
+[commit]
+	gpgsign = true
+[tag]
+	gpgsign = true
