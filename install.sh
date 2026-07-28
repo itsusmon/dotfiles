@@ -14,6 +14,10 @@
 #
 # Safe to re-run: links that already point at the right place are left alone,
 # and any real file or stale link in the way is moved into .backups/ first.
+#
+# Regular files under scripts/bin are linked into ~/.local/bin.
+# A wrong symlink there is refreshed, but any non-symlink collision is left
+# untouched and reported as an error.
 
 set -euo pipefail
 
@@ -65,9 +69,42 @@ link_file() {
   linked=$((linked + 1))
 }
 
+install_scripts() {
+  local scripts_dir="$DOTFILES_DIR/scripts/bin"
+  local bin_home="$HOME/.local/bin"
+  local source_path target_path
+
+  [[ -d "$scripts_dir" ]] || return
+
+  if [[ -e "$bin_home" && ! -d "$bin_home" ]]; then
+    die "Cannot install scripts: $bin_home exists and is not a directory"
+  fi
+  mkdir -p "$bin_home" || die "Cannot create script destination: $bin_home"
+
+  while IFS= read -r source_path; do
+    target_path="$bin_home/${source_path##*/}"
+
+    if [[ -L "$target_path" && "$(readlink "$target_path")" == "$source_path" ]]; then
+      skip "$target_path"; skipped=$((skipped + 1)); continue
+    fi
+
+    if [[ -L "$target_path" ]]; then
+      rm -f "$target_path" || die "Cannot refresh existing symlink: $target_path"
+    elif [[ -e "$target_path" ]]; then
+      die "Cannot install ${source_path##*/}: $target_path already exists and is not a symlink"
+    fi
+
+    ln -s "$source_path" "$target_path" || die "Cannot create symlink: $target_path"
+    ok "$target_path"
+    linked=$((linked + 1))
+  done < <(find "$scripts_dir" -type f | sort)
+}
+
 main() {
   [[ -f "$MANIFEST" ]] || die "No manifest at $MANIFEST"
   info "Linking dotfiles from ${DOTFILES_DIR/#$HOME/~}"
+
+  install_scripts
 
   local src tgt source_path f rel
   while read -r src tgt || [[ -n "$src" ]]; do

@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+
+set -u
+
+if [[ "${1:-}" == "--" ]]; then
+  shift
+fi
+
+if (( $# == 0 )); then
+  printf '%s\n' "Usage: quiet-build [--] <command> [arguments...]" >&2
+  exit 2
+fi
+
+log_file="$(mktemp)" || {
+  printf '%s\n' "quiet-build: failed to create temporary log file" >&2
+  exit 1
+}
+
+cleanup() {
+  rm -f "$log_file"
+}
+
+trap cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+"$@" >"$log_file" 2>&1
+status=$?
+
+if (( status == 0 )); then
+  printf '%s\n' "BUILD SUCCESSFUL"
+else
+  cat "$log_file" >&2
+fi
+
+exit "$status"

@@ -25,6 +25,7 @@ Each tool has its own README with what it is, why it's used, and how the config 
 The real files live in this repo with plain, visible names (`zshrc`, not `.zshrc`).
 [`dotfiles.conf`](dotfiles.conf) maps each source to its target under `$HOME`, and
 [`install.sh`](install.sh) creates the symlinks.
+The installer also links every regular file under `scripts/bin/` into `$HOME/.local/bin`.
 
 Only individual **files** are ever symlinked.
 When a manifest entry points at a directory, every file beneath it is linked one by one and the
@@ -42,7 +43,8 @@ git clone <repo> ~/.dotfiles
 `install.sh` is idempotent:
 
 - links already pointing at the right place are left alone
-- anything real (or a stale link) in the way is moved into `.backups/<timestamp>/` first
+- manifest target collisions are moved into `.backups/<timestamp>/` first
+- wrong executable symlinks are refreshed, while unrelated executable destination files are left untouched and reported as errors
 
 ## Adding a new dotfile
 
@@ -65,6 +67,7 @@ gradle/gradle.properties       → ~/.gradle/gradle.properties
 ssh/config                     → ~/.ssh/config
 gnupg/gpg.conf, gpg-agent.conf → ~/.gnupg/gpg.conf, ~/.gnupg/gpg-agent.conf
 AGENTS.md                      → ~/.claude/CLAUDE.md, ~/.gemini/GEMINI.md, ~/.config/opencode/AGENTS.md, ~/.codex/AGENTS.md, ~/AGENTS.md
+scripts/bin/*                  → ~/.local/bin/*
 ```
 
 ## Secrets

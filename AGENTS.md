@@ -19,8 +19,10 @@ These are common instructions for Usmon's agents across all scenarios.
   If you see one, even if it is not caused by what you are working on right now, still get it fixed.
 * Never assume generated or modified code works without verification.
   If behavior is uncertain, write and run the smallest practical test or reproduction needed to confirm that the code works as expected, including relevant edge cases.
-* When running a command only to check whether code compiles, use `--quiet` or the closest equivalent option.
-  Avoid unnecessary command output that consumes the context window without helping diagnose compilation errors.
+* When running a command only to verify that code compiles or builds, use the command's native `--quiet` option or closest reliable equivalent.
+  If no suitable quiet mode exists, run it through `quiet-build`, which suppresses successful output, prints `BUILD SUCCESSFUL` only after a successful exit, and displays the complete captured output when the command fails.
+  Do not redirect build output directly to `/dev/null`, because failure diagnostics must remain available.
+  Do not use `quiet-build` for interactive commands, commands requiring live output, or checks where warnings from a successful build must be reviewed.
 
 ## Coding: lazy by default
 
