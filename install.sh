@@ -18,6 +18,9 @@
 # Regular files under scripts/bin are linked into ~/.local/bin.
 # A wrong symlink there is refreshed, but any non-symlink collision is left
 # untouched and reported as an error.
+#
+# On macOS, the Nvim launcher is built from repository source and installed
+# atomically into ~/Applications/Nvim.app.
 
 set -euo pipefail
 
@@ -100,11 +103,22 @@ install_scripts() {
   done < <(find "$scripts_dir" -type f | sort)
 }
 
+install_nvim_app() {
+  if [[ "$(uname -s)" != "Darwin" ]]; then
+    skip "Nvim.app requires macOS"
+    return
+  fi
+
+  info "Installing Nvim.app"
+  "$DOTFILES_DIR/scripts/bin/nvim-app" install
+}
+
 main() {
   [[ -f "$MANIFEST" ]] || die "No manifest at $MANIFEST"
   info "Linking dotfiles from ${DOTFILES_DIR/#$HOME/~}"
 
   install_scripts
+  install_nvim_app
 
   local src tgt source_path f rel
   while read -r src tgt || [[ -n "$src" ]]; do

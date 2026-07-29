@@ -1,0 +1,362 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+script_path="${BASH_SOURCE[0]}"
+while [[ -L "$script_path" ]]; do
+  link_target="$(readlink "$script_path")"
+  if [[ "$link_target" == /* ]]; then
+    script_path="$link_target"
+  else
+    script_path="$(dirname "$script_path")/$link_target"
+  fi
+done
+script_path="$(cd "$(dirname "$script_path")" && pwd)/$(basename "$script_path")"
+
+repo_dir="$(cd "$(dirname "$script_path")/../.." && pwd)"
+launcher_dir="$repo_dir/config/nvim/launcher"
+source_script="$launcher_dir/NvimLauncher.applescript"
+source_helper="$launcher_dir/NvimLauncherHelper.swift"
+source_plist="$launcher_dir/Info.plist"
+source_icon_package="$launcher_dir/Nvim.icon"
+source_icon_light="$source_icon_package/Assets/Nvim-light.svg"
+source_icon_dark="$source_icon_package/Assets/Nvim-dark.svg"
+source_icon_manifest="$source_icon_package/icon.json"
+installed_app="$HOME/Applications/Nvim.app"
+bundle_identifier="com.usmon.nvim-launcher"
+lsregister="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+
+info() {
+  printf '%s\n' "$1"
+}
+
+die() {
+  printf '%s\n' "nvim-app: $1" >&2
+  exit 1
+}
+
+usage() {
+  cat <<'EOF'
+Usage: nvim-app install|verify|uninstall
+
+Build, validate, install, or remove ~/Applications/Nvim.app.
+EOF
+}
+
+require_tool() {
+  [[ -x "$1" ]] || die "required macOS tool is unavailable: $1"
+}
+
+plist_value() {
+  /usr/libexec/PlistBuddy -c "Print :$2" "$1/Contents/Info.plist" 2>/dev/null
+}
+
+source_hash() {
+  local file relative digest
+
+  {
+    for file in \
+      "$source_script" \
+      "$source_helper" \
+      "$source_plist" \
+      "$source_icon_light" \
+      "$source_icon_dark" \
+      "$source_icon_manifest" \
+      "$script_path"; do
+      [[ -f "$file" ]] || die "launcher source is missing: $file"
+      relative="${file#"$repo_dir"/}"
+      digest="$(/usr/bin/shasum -a 256 "$file")"
+      digest="${digest%% *}"
+      printf '%s %s\n' "$relative" "$digest"
+    done
+  } | /usr/bin/shasum -a 256 | /usr/bin/awk '{print $1}'
+}
+
+adaptive_icons_available() {
+  local major_version
+
+  major_version="$(/usr/bin/sw_vers -productVersion)"
+  major_version="${major_version%%.*}"
+  ((major_version >= 26)) && /usr/bin/xcrun --find actool >/dev/null 2>&1
+}
+
+find_ghostty() {
+  local candidate
+
+  for candidate in "/Applications/Ghostty.app" "$HOME/Applications/Ghostty.app"; do
+    if [[ -d "$candidate" ]]; then
+      printf '%s\n' "$candidate"
+      return
+    fi
+  done
+
+  return 1
+}
+
+verify_ghostty() {
+  local ghostty_app="$1"
+  local ghostty_executable version scripting_definition effective_config
+  local required_command
+
+  version="$(plist_value "$ghostty_app" CFBundleShortVersionString)" ||
+    die "cannot read the Ghostty version from $ghostty_app"
+  scripting_definition="$(/usr/bin/sdef "$ghostty_app")" ||
+    die "cannot read Ghostty's AppleScript dictionary"
+
+  for required_command in \
+    '<command name="new surface configuration"' \
+    '<command name="new window"' \
+    '<command name="new tab"' \
+    '<command name="select tab"' \
+    '<command name="focus"' \
+    '<command name="close"' \
+    '<command name="activate window"' \
+    '<property name="id"' \
+    '<property name="initial working directory"' \
+    '<property name="command"' \
+    '<property name="wait after command"'; do
+    [[ "$scripting_definition" == *"$required_command"* ]] ||
+      die "Ghostty $version lacks the required AppleScript API; install Ghostty 1.3 or newer"
+  done
+
+  ghostty_executable="$(plist_value "$ghostty_app" CFBundleExecutable)" ||
+    die "cannot find Ghostty's executable"
+  ghostty_executable="$ghostty_app/Contents/MacOS/$ghostty_executable"
+  [[ -x "$ghostty_executable" ]] || die "Ghostty's executable is missing: $ghostty_executable"
+
+  effective_config="$("$ghostty_executable" +show-config 2>/dev/null)" ||
+    die "cannot read Ghostty's effective configuration"
+  [[ "$effective_config" != *"macos-applescript = false"* ]] ||
+    die "Ghostty AppleScript support is disabled; remove 'macos-applescript = false' from Ghostty's configuration"
+
+  info "Ghostty $version provides the required AppleScript API"
+}
+
+validate_bundle() {
+  local app="$1" expected_hash="${2:-}"
+  local actual_identifier actual_hash executable
+
+  [[ -d "$app" ]] || return 1
+  [[ -f "$app/Contents/Info.plist" ]] || return 1
+  /usr/bin/plutil -lint "$app/Contents/Info.plist" >/dev/null 2>&1 || return 1
+
+  actual_identifier="$(plist_value "$app" CFBundleIdentifier)" || return 1
+  [[ "$actual_identifier" == "$bundle_identifier" ]] || return 1
+
+  executable="$(plist_value "$app" CFBundleExecutable)" || return 1
+  [[ -x "$app/Contents/MacOS/$executable" ]] || return 1
+  [[ -f "$app/Contents/Resources/Scripts/main.scpt" ]] || return 1
+  [[ -x "$app/Contents/Resources/nvim-launcher-helper" ]] || return 1
+  [[ -f "$app/Contents/Resources/Nvim.icns" ]] || return 1
+  if adaptive_icons_available; then
+    [[ -f "$app/Contents/Resources/Assets.car" ]] || return 1
+  fi
+  [[ -f "$app/Contents/Resources/.dotfiles-nvim-launcher" ]] || return 1
+
+  if [[ -n "$expected_hash" ]]; then
+    actual_hash="$(plist_value "$app" NvimLauncherSourceHash)" || return 1
+    [[ "$actual_hash" == "$expected_hash" ]] || return 1
+  fi
+
+  /usr/bin/codesign --verify --deep --strict "$app" >/dev/null 2>&1 || return 1
+}
+
+assert_safe_destination() {
+  local actual_identifier
+
+  if [[ -L "$installed_app" || ( -e "$installed_app" && ! -d "$installed_app" ) ]]; then
+    die "$installed_app exists and is not an application directory; refusing to replace it"
+  fi
+
+  if [[ -d "$installed_app" ]]; then
+    actual_identifier="$(plist_value "$installed_app" CFBundleIdentifier || true)"
+    [[ "$actual_identifier" == "$bundle_identifier" ||
+      -f "$installed_app/Contents/Resources/.dotfiles-nvim-launcher" ]] ||
+      die "$installed_app is not the dotfiles-managed Nvim application; refusing to replace it"
+  fi
+}
+
+make_icon() {
+  local source="$1" iconset="$2" output="$3"
+  local point_size pixel_size suffix
+
+  mkdir -p "$iconset"
+  for point_size in 16 32 128 256 512; do
+    for suffix in "" "@2x"; do
+      pixel_size="$point_size"
+      [[ "$suffix" == "@2x" ]] && pixel_size=$((point_size * 2))
+      /usr/bin/sips -s format png -z "$pixel_size" "$pixel_size" "$source" \
+        --out "$iconset/icon_${point_size}x${point_size}${suffix}.png" >/dev/null
+    done
+  done
+  /usr/bin/iconutil --convert icns --output "$output" "$iconset"
+}
+
+build_staged_app() {
+  local app="$1" hash="$2" architecture icon_output iconset
+
+  /usr/bin/osacompile -o "$app" "$source_script"
+  /bin/cp "$source_plist" "$app/Contents/Info.plist"
+  /usr/libexec/PlistBuddy -c "Set :NvimLauncherSourceHash $hash" "$app/Contents/Info.plist"
+  /usr/bin/touch "$app/Contents/Resources/.dotfiles-nvim-launcher"
+
+  /usr/bin/xcrun --find swiftc >/dev/null ||
+    die "Swift compiler is unavailable; install the Xcode Command Line Tools"
+  architecture="$(/usr/bin/uname -m)"
+  case "$architecture" in
+    arm64 | x86_64) ;;
+    *) die "Unsupported Mac architecture for Nvim.app: $architecture" ;;
+  esac
+  /usr/bin/xcrun swiftc \
+    -O \
+    -parse-as-library \
+    -target "$architecture-apple-macosx13.0" \
+    -o "$app/Contents/Resources/nvim-launcher-helper" \
+    "$source_helper"
+
+  iconset="${app%/*}/Nvim.iconset"
+  make_icon "$source_icon_light" "$iconset" "$app/Contents/Resources/Nvim.icns"
+  if adaptive_icons_available; then
+    if ! icon_output="$(
+      /usr/bin/xcrun actool \
+        "$source_icon_package" \
+        --compile "$app/Contents/Resources" \
+        --platform macosx \
+        --minimum-deployment-target 13.0 \
+        --app-icon Nvim \
+        --output-partial-info-plist "${app%/*}/Nvim-icon-info.plist" \
+        --output-format human-readable-text \
+        --warnings \
+        --errors \
+        --notices 2>&1
+    )"; then
+      [[ -z "$icon_output" ]] || printf '%s\n' "$icon_output" >&2
+      die "the adaptive Nvim icon failed to compile"
+    fi
+  else
+    info "Adaptive light and dark icons require macOS 26 and Xcode 26; installed the light fallback icon"
+  fi
+
+  /usr/bin/plutil -lint "$app/Contents/Info.plist"
+  /usr/bin/codesign --force --deep --sign - "$app"
+  /usr/bin/codesign --verify --deep --strict --verbose=1 "$app"
+  validate_bundle "$app" "$hash" || die "staged Nvim.app failed validation"
+}
+
+install_app() {
+  local ghostty_app hash stage_dir staged_app previous_app
+  local new_installed=0 install_complete=0
+
+  [[ "$(uname -s)" == "Darwin" ]] || die "Nvim.app can only be built on macOS"
+  for tool in \
+    /usr/bin/awk \
+    /usr/bin/codesign \
+    /usr/bin/iconutil \
+    /usr/bin/osacompile \
+    /usr/bin/plutil \
+    /usr/bin/sdef \
+    /usr/bin/shasum \
+    /usr/bin/sips \
+    /usr/bin/sw_vers \
+    /usr/bin/xcrun \
+    /usr/libexec/PlistBuddy \
+    "$lsregister"; do
+    require_tool "$tool"
+  done
+
+  ghostty_app="$(find_ghostty)" ||
+    die "Ghostty was not found in /Applications or ~/Applications; install Ghostty 1.3 or newer"
+  verify_ghostty "$ghostty_app"
+  assert_safe_destination
+
+  hash="$(source_hash)"
+  if validate_bundle "$installed_app" "$hash"; then
+    "$lsregister" -f "$installed_app"
+    info "$installed_app is current"
+    return
+  fi
+
+  mkdir -p "$HOME/Applications"
+  stage_dir="$(/usr/bin/mktemp -d "$HOME/Applications/.Nvim-app.XXXXXX")" ||
+    die "cannot create an installation staging directory"
+  staged_app="$stage_dir/Nvim.app"
+  previous_app="$stage_dir/previous-Nvim.app"
+
+  cleanup_install() {
+    if (( new_installed == 1 && install_complete == 0 )); then
+      /bin/rm -rf "$installed_app"
+      if [[ -d "$previous_app" ]]; then
+        /bin/mv "$previous_app" "$installed_app"
+      fi
+    fi
+    /bin/rm -rf "$stage_dir"
+  }
+  trap cleanup_install EXIT
+
+  build_staged_app "$staged_app" "$hash"
+
+  if [[ -d "$installed_app" ]]; then
+    /bin/mv "$installed_app" "$previous_app"
+  fi
+  /bin/mv "$staged_app" "$installed_app"
+  new_installed=1
+
+  validate_bundle "$installed_app" "$hash" ||
+    die "installed Nvim.app failed validation"
+  "$lsregister" -f "$installed_app"
+  install_complete=1
+  trap - EXIT
+  /bin/rm -rf "$stage_dir"
+  info "Installed $installed_app"
+}
+
+verify_app() {
+  local hash
+
+  hash="$(source_hash)"
+  validate_bundle "$installed_app" "$hash" ||
+    die "$installed_app is missing, invalid, unsigned, or out of date"
+  /usr/bin/plutil -lint "$installed_app/Contents/Info.plist"
+  /usr/bin/codesign --verify --deep --strict --verbose=1 "$installed_app"
+  info "$installed_app is valid and current"
+}
+
+uninstall_app() {
+  local actual_identifier
+
+  if [[ ! -e "$installed_app" && ! -L "$installed_app" ]]; then
+    info "$installed_app is already absent"
+    return
+  fi
+
+  [[ -d "$installed_app" && ! -L "$installed_app" ]] ||
+    die "$installed_app is not an application directory; refusing to remove it"
+  actual_identifier="$(plist_value "$installed_app" CFBundleIdentifier || true)"
+  [[ "$actual_identifier" == "$bundle_identifier" ]] ||
+    die "$installed_app is not the dotfiles-managed Nvim application; refusing to remove it"
+
+  if [[ -x "$lsregister" ]]; then
+    "$lsregister" -u "$installed_app" >/dev/null 2>&1 || true
+  fi
+  /bin/rm -rf "$installed_app"
+  info "Removed $installed_app"
+}
+
+case "${1:-}" in
+  install)
+    install_app
+    ;;
+  verify)
+    verify_app
+    ;;
+  uninstall)
+    uninstall_app
+    ;;
+  -h|--help)
+    usage
+    ;;
+  *)
+    usage >&2
+    exit 2
+    ;;
+esac

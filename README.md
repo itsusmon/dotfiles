@@ -11,7 +11,7 @@ Each tool has its own README with what it is, why it's used, and how the config 
 | [Zsh](config/zsh/README.md) | Shell + prompt, modular fast-startup setup | `config/zsh/`, `zshenv`, `zshrc`, `zprofile` |
 | [Ghostty](config/ghostty/README.md) | GPU terminal emulator (daily driver) | `config/ghostty/` |
 | [kanata](config/kanata/README.md) | Keyboard remapper: Caps -> Esc / Hyper, app launchers | `config/kanata/` |
-| [Neovim](config/nvim/README.md) | Main text editor (Lua + lazy.nvim) | `config/nvim/` |
+| [Neovim](config/nvim/README.md) | Main text editor plus a locally built macOS Finder launcher | `config/nvim/` |
 | [Vim / IdeaVim](config/vim/README.md) | Shared Vim config for real Vim + JetBrains IDEs | `config/vim/` |
 | [Git](config/git/README.md) | Version control identity + line-ending / ignore policy | `config/git/` |
 | [OpenCode](config/opencode/README.md) | Terminal AI coding agent | `config/opencode/` |
@@ -68,6 +68,7 @@ ssh/config                     → ~/.ssh/config
 gnupg/gpg.conf, gpg-agent.conf → ~/.gnupg/gpg.conf, ~/.gnupg/gpg-agent.conf
 AGENTS.md                      → ~/.claude/CLAUDE.md, ~/.gemini/GEMINI.md, ~/.config/opencode/AGENTS.md, ~/.codex/AGENTS.md, ~/AGENTS.md
 scripts/bin/*                  → ~/.local/bin/*
+config/nvim/launcher/*         → source for locally built ~/Applications/Nvim.app
 ```
 
 ## Secrets

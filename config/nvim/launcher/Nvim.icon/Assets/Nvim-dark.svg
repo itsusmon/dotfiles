@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Neovim mark by Jason Long and Neovim, CC BY 3.0: https://neovim.io/logos/ -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="blue" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#16B0ED" stop-opacity=".800235524"/>
+      <stop offset="1" stop-color="#0F59B2" stop-opacity=".83700023"/>
+    </linearGradient>
+    <linearGradient id="right-green" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#7DB643"/>
+      <stop offset="1" stop-color="#367533"/>
+    </linearGradient>
+    <linearGradient id="cross-green" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#88C649" stop-opacity=".8"/>
+      <stop offset="1" stop-color="#439240" stop-opacity=".84"/>
+    </linearGradient>
+  </defs>
+  <rect x="64" y="64" width="896" height="896" rx="210" fill="#151B18"/>
+  <g transform="translate(247 189) scale(.88)">
+    <g transform="translate(2 3)">
+      <path d="M0 155.5704 155-1l-.000003 728L0 572.237919V155.5704Z" fill="url(#blue)"/>
+      <path d="M443.060403 156.982405 600-1l-3.181208 728L442 572.219941l1.060403-415.237536Z" fill="url(#right-green)" transform="translate(1042 0) scale(-1 1)"/>
+      <path d="M154.986294 0 558 615.189696 445.224605 728 42 114.172017 154.986294 0Z" fill="url(#cross-green)"/>
+      <path d="m155 283.83232-.213246 24.16768L31 124.710606 42.461949 113 155 283.83232Z" fill="#000" fill-opacity=".13"/>
+    </g>
+  </g>
+</svg>
