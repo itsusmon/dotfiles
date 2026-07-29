@@ -2,6 +2,30 @@
 
 set -u
 
+if [[ "${1:-}" == "--help" ]]; then
+  cat <<'EOF'
+Usage: quiet-build [--] <command> [arguments...]
+
+Run a non-interactive command while hiding output from successful builds.
+
+Behavior:
+  Success  Discards captured stdout and stderr, prints BUILD SUCCESSFUL, and exits 0.
+  Failure  Prints captured stdout and stderr to stderr and preserves the command's exit status.
+
+Use quiet-build only when successful output and warnings do not need review.
+Do not use it for interactive commands or commands requiring live output.
+
+Options:
+  --help  Show this help and exit.
+  --      End quiet-build option parsing.
+
+Examples:
+  quiet-build npm test
+  quiet-build -- make all
+EOF
+  exit 0
+fi
+
 if [[ "${1:-}" == "--" ]]; then
   shift
 fi
@@ -16,11 +40,7 @@ log_file="$(mktemp)" || {
   exit 1
 }
 
-cleanup() {
-  rm -f "$log_file"
-}
-
-trap cleanup EXIT
+trap 'rm -f "$log_file"' EXIT
 trap 'exit 129' HUP
 trap 'exit 130' INT
 trap 'exit 143' TERM

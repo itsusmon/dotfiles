@@ -20,8 +20,10 @@ trap 'exit 129' HUP
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
+# shellcheck disable=SC2016 # The literal dollar sign tests argument preservation.
 argument='value with spaces & * ? [brackets] $dollar "quote"'
 success_output="$(
+  # shellcheck disable=SC2016 # Positional parameters expand in the child shell.
   EXPECTED_ARGUMENT="$argument" "$quiet_build" -- bash -c '
     [[ "$1" == "$EXPECTED_ARGUMENT" ]] || exit 91
     printf "%s\n" "hidden stdout"
@@ -30,6 +32,16 @@ success_output="$(
 )" || fail "successful command failed"
 [[ "$success_output" == "BUILD SUCCESSFUL" ]] ||
   fail "success output was not exactly one BUILD SUCCESSFUL line"
+
+help_output="$("$quiet_build" --help)" || fail "--help failed"
+[[ "$help_output" == *"Usage: quiet-build [--] <command> [arguments...]"* ]] ||
+  fail "--help did not print usage"
+[[ "$help_output" == *"Discards captured stdout and stderr"* ]] ||
+  fail "--help did not describe successful command behavior"
+[[ "$help_output" == *"preserves the command's exit status"* ]] ||
+  fail "--help did not describe failing command behavior"
+[[ "$help_output" == *"Do not use it for interactive commands"* ]] ||
+  fail "--help did not describe when the wrapper should not be used"
 
 failure_stdout="$test_dir/failure.stdout"
 failure_stderr="$test_dir/failure.stderr"
@@ -59,6 +71,7 @@ fi
 
 interrupt_dir="$test_dir/interrupt logs"
 mkdir -p "$interrupt_dir"
+# shellcheck disable=SC2016 # PPID expands in the child shell.
 if TMPDIR="$interrupt_dir" "$quiet_build" bash -c 'kill -TERM "$PPID"' \
   >"$test_dir/interrupt.stdout" 2>"$test_dir/interrupt.stderr"; then
   fail "interrupted command reported success"
@@ -73,24 +86,29 @@ repo_copy="$test_dir/repository with spaces"
 mkdir -p "$repo_copy/scripts/bin"
 cp "$repo_dir/install.sh" "$repo_copy/install.sh"
 cp "$quiet_build" "$repo_copy/scripts/bin/quiet-build"
+printf '%s\n' '#!/usr/bin/env bash' 'exit 0' >"$repo_copy/scripts/bin/nvim-app"
+chmod +x "$repo_copy/scripts/bin/nvim-app"
 : >"$repo_copy/dotfiles.conf"
 
 test_home="$test_dir/home directory"
 bin_home="$test_home/.local/bin"
 mkdir -p "$test_home"
-HOME="$test_home" "$repo_copy/install.sh" >/dev/null
+HOME="$test_home" "$repo_copy/install.sh" >/dev/null ||
+  fail "installer failed with an isolated nvim-app stub"
 installed="$bin_home/quiet-build"
 expected_source="$repo_copy/scripts/bin/quiet-build"
 [[ -L "$installed" && "$(readlink "$installed")" == "$expected_source" ]] ||
   fail "installation did not create the expected absolute symlink"
 
-HOME="$test_home" "$repo_copy/install.sh" >/dev/null
+HOME="$test_home" "$repo_copy/install.sh" >/dev/null ||
+  fail "second installer run failed"
 [[ -L "$installed" && "$(readlink "$installed")" == "$expected_source" ]] ||
   fail "second installation changed the correct symlink"
 
 rm -f "$installed"
 ln -s "$repo_copy/wrong-target" "$installed"
-HOME="$test_home" "$repo_copy/install.sh" >/dev/null
+HOME="$test_home" "$repo_copy/install.sh" >/dev/null ||
+  fail "installer failed while refreshing an incorrect symlink"
 [[ -L "$installed" && "$(readlink "$installed")" == "$expected_source" ]] ||
   fail "installation did not refresh an incorrect symlink"
 
