@@ -4,23 +4,52 @@ set -euo pipefail
 set +x
 umask 077
 
-git_bin=/usr/bin/git
+git_bin=$(command -v git || true)
 remote_name=${1:-}
 remote_url=${2:-}
-primary_fingerprint=4F430EF8893AE3D330C5B8BE14FC48F9BBE08171
-github_fingerprint=D98D08FE47805CB10E2CA7549E163909697C6FAA
-sqb_fingerprint=32F5ABAC7FFF28AB37915C68C7FA8C4F34356FD6
+identities_file="${XDG_CONFIG_HOME:-"$HOME/.config"}/git/signing-identities.sh"
 
-if [[ -z "$remote_name" || -z "$remote_url" ]]; then
-  printf '%s\n' 'pre-push: remote name and URL are required' >&2
+if [[ -z "$git_bin" || ! -x "$git_bin" ]]; then
+  printf '%s\n' 'pre-push: cannot find an executable git in PATH.' >&2
+  printf '%s\n' '  Fix: install Git, then confirm `command -v git` prints its absolute path.' >&2
   exit 2
 fi
 
-temporary_dir=$(mktemp -d /private/tmp/gpg-pre-push.XXXXXX)
+if [[ -z "$remote_name" || -z "$remote_url" ]]; then
+  printf '%s\n' 'pre-push: Git did not provide both the remote name and URL.' >&2
+  printf '%s\n' \
+    '  Fix: invoke this as a Git pre-push hook, or provide `<remote-name> <remote-url>` when testing manually.' >&2
+  exit 2
+fi
+
+if [[ ! -r "$identities_file" ]]; then
+  printf 'pre-push: identity configuration is missing or unreadable: %s\n' \
+    "$identities_file" >&2
+  printf '%s\n' \
+    '  Fix: run the dotfiles installer or create this file from config/git/signing-identities.sh.' >&2
+  exit 2
+fi
+
+GPG_GIT_IDENTITIES_PATH=$identities_file
+. "$identities_file"
+gpg_git_load_identities
+primary_fingerprint=$GPG_GIT_PRIMARY_FINGERPRINT
+
+temporary_root=${TMPDIR:-/tmp}
+temporary_root=${temporary_root%/}
+if [[ ! -d "$temporary_root" || ! -w "$temporary_root" ]]; then
+  printf 'pre-push: temporary directory is unavailable or unwritable: %s\n' \
+    "$temporary_root" >&2
+  printf '%s\n' '  Fix: set TMPDIR to a private writable directory.' >&2
+  exit 2
+fi
+
+temporary_dir=$(mktemp -d "$temporary_root/gpg-pre-push.XXXXXX")
 case "$temporary_dir" in
-  /private/tmp/gpg-pre-push.*) ;;
+  "$temporary_root"/gpg-pre-push.*) ;;
   *)
-    printf '%s\n' 'pre-push: unsafe temporary directory path' >&2
+    printf 'pre-push: mktemp returned an unexpected path: %s\n' "$temporary_dir" >&2
+    printf '  Expected a directory under: %s\n' "$temporary_root" >&2
     exit 2
     ;;
 esac
@@ -70,7 +99,10 @@ extract_host() {
 }
 
 destination_host=$(extract_host "$resolved_url") || {
-  printf '%s\n' 'pre-push: refusing unsupported or non-network push URL' >&2
+  printf 'pre-push: cannot safely parse the push destination URL: %s\n' \
+    "$resolved_url" >&2
+  printf '%s\n' \
+    '  Fix: use a standard SSH or HTTPS Git URL and inspect the resolved URL with `git remote get-url --push <remote>`.' >&2
   exit 2
 }
 
@@ -84,24 +116,23 @@ trim_email() {
 repository_email=$("$git_bin" config --get user.email 2>/dev/null || true)
 repository_email=$(trim_email "$repository_email")
 
-case "$repository_email" in
-  heyitsusmon@gmail.com)
-    if [[ "$destination_host" != github.com ]]; then
-      printf 'pre-push: personal repository cannot push to host %s\n' "$destination_host" >&2
-      exit 1
-    fi
-    ;;
-  uabduraxmonov@sqb.uz)
-    if [[ "$destination_host" != gitlab.sqb.uz ]]; then
-      printf 'pre-push: work repository cannot push to host %s\n' "$destination_host" >&2
-      exit 1
-    fi
-    ;;
-esac
+if gpg_git_find_identity "$repository_email"; then
+  if [[ "$destination_host" != "$gpg_git_identity_host" ]]; then
+    printf 'pre-push: repository identity %s cannot push to host %s\n' \
+      "$repository_email" "$destination_host" >&2
+    printf '  Configured host for this identity: %s\n' "$gpg_git_identity_host" >&2
+    printf '%s\n' \
+      '  Fix: correct `user.email`, select the intended remote, or update the identity mapping if the destination has legitimately changed.' >&2
+    exit 1
+  fi
+fi
 
 while IFS=' ' read -r local_ref local_oid remote_ref remote_oid extra; do
   [[ -z "${extra:-}" ]] || {
-    printf '%s\n' 'pre-push: malformed ref update' >&2
+    printf 'pre-push: malformed ref update from Git: %s %s %s %s %s\n' \
+      "$local_ref" "$local_oid" "$remote_ref" "$remote_oid" "$extra" >&2
+    printf '%s\n' \
+      '  Fix: rerun the push normally. If this repeats, inspect any wrapper that writes pre-push standard input.' >&2
     exit 2
   }
   [[ -n "${local_ref:-}" && -n "${local_oid:-}" && -n "${remote_ref:-}" && -n "${remote_oid:-}" ]] || continue
@@ -125,6 +156,8 @@ while IFS= read -r commit_oid; do
     --format='%ce%x00%G?%x00%GF%x00%GP%x00' "$commit_oid")
   IFS= read -r -d '' commit_email <&3 || {
     printf 'pre-push: cannot read committer email for %s\n' "$commit_oid" >&2
+    printf '%s\n' \
+      '  Fix: verify that the object is a readable commit with `git cat-file -t <commit>`.' >&2
     exit 1
   }
   IFS= read -r -d '' signature_status <&3 || true
@@ -134,22 +167,18 @@ while IFS= read -r commit_oid; do
 
   commit_email=$(trim_email "$commit_email")
 
-  case "$commit_email" in
-    heyitsusmon@gmail.com)
-      expected_host=github.com
-      expected_fingerprint=$github_fingerprint
-      ;;
-    uabduraxmonov@sqb.uz)
-      expected_host=gitlab.sqb.uz
-      expected_fingerprint=$sqb_fingerprint
-      ;;
-    *)
-      continue
-      ;;
-  esac
+  if ! gpg_git_find_identity "$commit_email"; then
+    continue
+  fi
+  expected_host=$gpg_git_identity_host
+  expected_fingerprint=$gpg_git_identity_fingerprint
 
   if [[ "$destination_host" != "$expected_host" ]]; then
     printf 'pre-push: commit %s cannot be pushed to host %s\n' "$commit_oid" "$destination_host" >&2
+    printf '  Commit identity: %s\n' "$commit_email" >&2
+    printf '  Configured host for this identity: %s\n' "$expected_host" >&2
+    printf '%s\n' \
+      '  Fix: push to the configured host or rewrite the commit with the identity intended for this destination.' >&2
     exit 1
   fi
 
@@ -157,6 +186,10 @@ while IFS= read -r commit_oid; do
     G | U) ;;
     *)
       printf 'pre-push: commit %s does not have a valid known OpenPGP signature\n' "$commit_oid" >&2
+      printf '  Commit identity: %s; signature status: %s\n' \
+        "$commit_email" "${signature_status:-<missing>}" >&2
+      printf '%s\n' \
+        '  Fix: configure the intended email and signing subkey, then amend and sign the commit before pushing.' >&2
       exit 1
       ;;
   esac
@@ -164,12 +197,18 @@ while IFS= read -r commit_oid; do
   if [[ "$signing_fingerprint" != "$expected_fingerprint" ]]; then
     printf 'pre-push: commit %s used signing subkey %s instead of %s\n' \
       "$commit_oid" "${signing_fingerprint:-<none>}" "$expected_fingerprint" >&2
+    printf '  Commit identity: %s\n' "$commit_email" >&2
+    printf '%s\n' \
+      '  Fix: set the repository email to the intended configured identity, then amend and re-sign the commit.' >&2
     exit 1
   fi
 
   if [[ "$signing_primary" != "$primary_fingerprint" ]]; then
     printf 'pre-push: commit %s has unexpected primary fingerprint %s\n' \
       "$commit_oid" "${signing_primary:-<none>}" >&2
+    printf '  Expected primary fingerprint: %s\n' "$primary_fingerprint" >&2
+    printf '%s\n' \
+      '  Fix: verify the configured subkey belongs to the expected OpenPGP hierarchy, then amend and re-sign the commit.' >&2
     exit 1
   fi
 done < "$unique_commits_file"

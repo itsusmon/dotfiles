@@ -4,11 +4,11 @@
 	useConfigOnly = true
 [core]
 	autocrlf = input
-	hooksPath = /Users/usmon/.config/git/hooks
+	hooksPath = ~/.config/git/hooks
 [gpg]
 	format = openpgp
 [gpg "openpgp"]
-	program = /Users/usmon/.local/bin/gpg-git-sign
+	program = gpg-git-sign
 [commit]
 	gpgsign = true
 [tag]

@@ -4,9 +4,21 @@ set -euo pipefail
 set +x
 umask 077
 
-gpg_bin=/opt/homebrew/bin/gpg
-git_bin=/usr/bin/git
+gpg_bin=$(command -v gpg || true)
+git_bin=$(command -v git || true)
+identities_file="${XDG_CONFIG_HOME:-"$HOME/.config"}/git/signing-identities.sh"
 signing=0
+
+if [[ -z "$gpg_bin" || ! -x "$gpg_bin" ]]; then
+  printf '%s\n' 'gpg-git-sign: cannot find an executable gpg in PATH.' >&2
+  printf '%s\n' '  Fix: install modern GnuPG, then confirm `command -v gpg` prints its absolute path.' >&2
+  exit 2
+fi
+if [[ -z "$git_bin" || ! -x "$git_bin" ]]; then
+  printf '%s\n' 'gpg-git-sign: cannot find an executable git in PATH.' >&2
+  printf '%s\n' '  Fix: install Git, then confirm `command -v git` prints its absolute path.' >&2
+  exit 2
+fi
 
 for argument in "$@"; do
   case "$argument" in
@@ -30,27 +42,65 @@ if [[ "$signing" -eq 0 ]]; then
   exec "$gpg_bin" "$@"
 fi
 
+if [[ ! -r "$identities_file" ]]; then
+  printf 'gpg-git-sign: identity configuration is missing or unreadable: %s\n' \
+    "$identities_file" >&2
+  printf '%s\n' \
+    '  Fix: run the dotfiles installer or create this file from config/git/signing-identities.sh.' >&2
+  exit 2
+fi
+
+GPG_GIT_IDENTITIES_PATH=$identities_file
+. "$identities_file"
+gpg_git_load_identities
+
 email=$("$git_bin" config --get user.email 2>/dev/null || true)
 email="${email#"${email%%[![:space:]]*}"}"
 email="${email%"${email##*[![:space:]]}"}"
 email_lower=$(LC_ALL=C printf '%s' "$email" | tr '[:upper:]' '[:lower:]')
 
-case "$email_lower" in
-  heyitsusmon@gmail.com)
-    signing_fingerprint='D98D08FE47805CB10E2CA7549E163909697C6FAA!'
-    ;;
-  uabduraxmonov@sqb.uz)
-    signing_fingerprint='32F5ABAC7FFF28AB37915C68C7FA8C4F34356FD6!'
-    ;;
-  '')
-    printf '%s\n' 'gpg-git-sign: refusing to sign because user.email is missing' >&2
-    exit 2
-    ;;
-  *)
-    printf 'gpg-git-sign: refusing to sign for unsupported user.email: %s\n' "$email" >&2
-    exit 2
-    ;;
-esac
+if [[ -z "$email_lower" ]]; then
+  printf '%s\n' 'gpg-git-sign: refusing to sign because user.email is missing' >&2
+  printf '%s\n' \
+    '  Fix: set a configured repository identity with `git config user.email you@example.com`.' >&2
+  exit 2
+fi
+if ! gpg_git_find_identity "$email_lower"; then
+  printf 'gpg-git-sign: refusing to sign for unsupported user.email: %s\n' "$email" >&2
+  printf '  Fix: add this email and its signing subkey to %s, or set one of these configured emails:\n' \
+    "$identities_file" >&2
+  gpg_git_list_configured_emails >&2
+  exit 2
+fi
+signing_fingerprint="$gpg_git_identity_fingerprint!"
+
+secret_listing=$(
+  "$gpg_bin" \
+    --batch \
+    --with-colons \
+    --with-fingerprint \
+    --with-subkey-fingerprint \
+    --list-secret-keys "$gpg_git_identity_fingerprint" 2>/dev/null || true
+)
+if ! printf '%s\n' "$secret_listing" | awk -F: -v fingerprint="$gpg_git_identity_fingerprint" '
+  $1=="ssb" {
+    usable=($15=="+")
+    next
+  }
+  $1=="fpr" && $10==fingerprint && usable {
+    found=1
+  }
+  END {
+    exit !found
+  }
+'; then
+  printf 'gpg-git-sign: configured signing subkey is unavailable for %s: %s\n' \
+    "$email_lower" "$gpg_git_identity_fingerprint" >&2
+  printf '%s\n' \
+    '  Fix: import the secret signing subkey into the standard GnuPG home, then verify it with:' >&2
+  printf '  gpg --list-secret-keys %s\n' "$gpg_git_identity_fingerprint" >&2
+  exit 2
+fi
 
 rewritten_arguments=()
 skip_next=0
