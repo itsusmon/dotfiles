@@ -1,9 +1,14 @@
 [user]
 	name = Usmonjon Abdurakhmanov
 	email = heyitsusmon@gmail.com
-	signingkey = 745BC7D934A23128CF24C64E7EF78997939A17FD!
+	useConfigOnly = true
 [core]
 	autocrlf = input
+	hooksPath = /Users/usmon/.config/git/hooks
+[gpg]
+	format = openpgp
+[gpg "openpgp"]
+	program = /Users/usmon/.local/bin/gpg-git-sign
 [commit]
 	gpgsign = true
 [tag]

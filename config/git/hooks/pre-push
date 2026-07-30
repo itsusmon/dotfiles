@@ -1,0 +1,186 @@
+#!/bin/bash
+
+set -euo pipefail
+set +x
+umask 077
+
+git_bin=/usr/bin/git
+remote_name=${1:-}
+remote_url=${2:-}
+primary_fingerprint=4F430EF8893AE3D330C5B8BE14FC48F9BBE08171
+github_fingerprint=D98D08FE47805CB10E2CA7549E163909697C6FAA
+sqb_fingerprint=32F5ABAC7FFF28AB37915C68C7FA8C4F34356FD6
+
+if [[ -z "$remote_name" || -z "$remote_url" ]]; then
+  printf '%s\n' 'pre-push: remote name and URL are required' >&2
+  exit 2
+fi
+
+temporary_dir=$(mktemp -d /private/tmp/gpg-pre-push.XXXXXX)
+case "$temporary_dir" in
+  /private/tmp/gpg-pre-push.*) ;;
+  *)
+    printf '%s\n' 'pre-push: unsafe temporary directory path' >&2
+    exit 2
+    ;;
+esac
+
+cleanup() {
+  rm -rf "$temporary_dir"
+}
+trap cleanup EXIT
+
+push_input="$temporary_dir/push-input"
+commits_file="$temporary_dir/commits"
+unique_commits_file="$temporary_dir/commits-unique"
+
+/bin/cat > "$push_input"
+: > "$commits_file"
+
+resolved_url=$remote_url
+if configured_url=$("$git_bin" remote get-url --push "$remote_name" 2>/dev/null); then
+  resolved_url=$configured_url
+fi
+
+extract_host() {
+  local url=$1
+  local remainder authority host_port prefix host
+
+  case "$url" in
+    *://*)
+      remainder=${url#*://}
+      authority=${remainder%%/*}
+      [[ -n "$authority" && "$authority" != "$remainder" ]] || return 1
+      host_port=${authority##*@}
+      [[ "$host_port" != \[* ]] || return 1
+      host=${host_port%%:*}
+      ;;
+    *:*)
+      prefix=${url%%:*}
+      [[ "$prefix" != */* ]] || return 1
+      host=${prefix##*@}
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+
+  [[ "$host" =~ ^[A-Za-z0-9.-]+$ ]] || return 1
+  LC_ALL=C printf '%s' "$host" | tr '[:upper:]' '[:lower:]'
+}
+
+destination_host=$(extract_host "$resolved_url") || {
+  printf '%s\n' 'pre-push: refusing unsupported or non-network push URL' >&2
+  exit 2
+}
+
+trim_email() {
+  local value=$1
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  LC_ALL=C printf '%s' "$value" | tr '[:upper:]' '[:lower:]'
+}
+
+repository_email=$("$git_bin" config --get user.email 2>/dev/null || true)
+repository_email=$(trim_email "$repository_email")
+
+case "$repository_email" in
+  heyitsusmon@gmail.com)
+    if [[ "$destination_host" != github.com ]]; then
+      printf 'pre-push: personal repository cannot push to host %s\n' "$destination_host" >&2
+      exit 1
+    fi
+    ;;
+  uabduraxmonov@sqb.uz)
+    if [[ "$destination_host" != gitlab.sqb.uz ]]; then
+      printf 'pre-push: work repository cannot push to host %s\n' "$destination_host" >&2
+      exit 1
+    fi
+    ;;
+esac
+
+while IFS=' ' read -r local_ref local_oid remote_ref remote_oid extra; do
+  [[ -z "${extra:-}" ]] || {
+    printf '%s\n' 'pre-push: malformed ref update' >&2
+    exit 2
+  }
+  [[ -n "${local_ref:-}" && -n "${local_oid:-}" && -n "${remote_ref:-}" && -n "${remote_oid:-}" ]] || continue
+  [[ "$local_oid" =~ ^0+$ ]] && continue
+
+  local_commit=$("$git_bin" rev-parse --verify "$local_oid^{commit}" 2>/dev/null) || continue
+
+  if [[ "$remote_oid" =~ ^0+$ ]]; then
+    "$git_bin" rev-list "$local_commit" --not --remotes="$remote_name" >> "$commits_file"
+  else
+    "$git_bin" rev-list "$local_commit" --not "$remote_oid" >> "$commits_file"
+  fi
+done < "$push_input"
+
+LC_ALL=C sort -u "$commits_file" > "$unique_commits_file"
+
+while IFS= read -r commit_oid; do
+  [[ -n "$commit_oid" ]] || continue
+
+  exec 3< <("$git_bin" show --no-ext-diff --no-textconv -s \
+    --format='%ce%x00%G?%x00%GF%x00%GP%x00' "$commit_oid")
+  IFS= read -r -d '' commit_email <&3 || {
+    printf 'pre-push: cannot read committer email for %s\n' "$commit_oid" >&2
+    exit 1
+  }
+  IFS= read -r -d '' signature_status <&3 || true
+  IFS= read -r -d '' signing_fingerprint <&3 || true
+  IFS= read -r -d '' signing_primary <&3 || true
+  exec 3<&-
+
+  commit_email=$(trim_email "$commit_email")
+
+  case "$commit_email" in
+    heyitsusmon@gmail.com)
+      expected_host=github.com
+      expected_fingerprint=$github_fingerprint
+      ;;
+    uabduraxmonov@sqb.uz)
+      expected_host=gitlab.sqb.uz
+      expected_fingerprint=$sqb_fingerprint
+      ;;
+    *)
+      continue
+      ;;
+  esac
+
+  if [[ "$destination_host" != "$expected_host" ]]; then
+    printf 'pre-push: commit %s cannot be pushed to host %s\n' "$commit_oid" "$destination_host" >&2
+    exit 1
+  fi
+
+  case "$signature_status" in
+    G | U) ;;
+    *)
+      printf 'pre-push: commit %s does not have a valid known OpenPGP signature\n' "$commit_oid" >&2
+      exit 1
+      ;;
+  esac
+
+  if [[ "$signing_fingerprint" != "$expected_fingerprint" ]]; then
+    printf 'pre-push: commit %s used signing subkey %s instead of %s\n' \
+      "$commit_oid" "${signing_fingerprint:-<none>}" "$expected_fingerprint" >&2
+    exit 1
+  fi
+
+  if [[ "$signing_primary" != "$primary_fingerprint" ]]; then
+    printf 'pre-push: commit %s has unexpected primary fingerprint %s\n' \
+      "$commit_oid" "${signing_primary:-<none>}" >&2
+    exit 1
+  fi
+done < "$unique_commits_file"
+
+git_dir=$("$git_bin" rev-parse --absolute-git-dir)
+repository_hook="$git_dir/hooks/pre-push"
+if [[ -x "$repository_hook" && ! "$repository_hook" -ef "$0" ]]; then
+  "$repository_hook" "$@" < "$push_input"
+fi
+
+local_hook="${0}.local"
+if [[ -x "$local_hook" && ! "$local_hook" -ef "$0" ]]; then
+  "$local_hook" "$@" < "$push_input"
+fi

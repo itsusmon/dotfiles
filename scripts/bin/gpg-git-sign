@@ -1,0 +1,94 @@
+#!/bin/bash
+
+set -euo pipefail
+set +x
+umask 077
+
+gpg_bin=/opt/homebrew/bin/gpg
+git_bin=/usr/bin/git
+signing=0
+
+for argument in "$@"; do
+  case "$argument" in
+    --sign | --detach-sign | --clearsign)
+      signing=1
+      ;;
+    --*)
+      ;;
+    -?*)
+      short_options=${argument#-}
+      if [[ "$short_options" == *s* || "$short_options" == *b* ]]; then
+        signing=1
+      fi
+      ;;
+  esac
+done
+
+unset GNUPGHOME
+
+if [[ "$signing" -eq 0 ]]; then
+  exec "$gpg_bin" "$@"
+fi
+
+email=$("$git_bin" config --get user.email 2>/dev/null || true)
+email="${email#"${email%%[![:space:]]*}"}"
+email="${email%"${email##*[![:space:]]}"}"
+email_lower=$(LC_ALL=C printf '%s' "$email" | tr '[:upper:]' '[:lower:]')
+
+case "$email_lower" in
+  heyitsusmon@gmail.com)
+    signing_fingerprint='D98D08FE47805CB10E2CA7549E163909697C6FAA!'
+    ;;
+  uabduraxmonov@sqb.uz)
+    signing_fingerprint='32F5ABAC7FFF28AB37915C68C7FA8C4F34356FD6!'
+    ;;
+  '')
+    printf '%s\n' 'gpg-git-sign: refusing to sign because user.email is missing' >&2
+    exit 2
+    ;;
+  *)
+    printf 'gpg-git-sign: refusing to sign for unsupported user.email: %s\n' "$email" >&2
+    exit 2
+    ;;
+esac
+
+rewritten_arguments=()
+skip_next=0
+
+for argument in "$@"; do
+  if [[ "$skip_next" -eq 1 ]]; then
+    skip_next=0
+    continue
+  fi
+
+  case "$argument" in
+    --local-user | --default-key)
+      skip_next=1
+      ;;
+    --local-user=* | --default-key=*)
+      ;;
+    --*)
+      rewritten_arguments+=("$argument")
+      ;;
+    -?*)
+      short_options=${argument#-}
+      if [[ "$short_options" == *u* ]]; then
+        options_before_user=${short_options%%u*}
+        options_after_user=${short_options#*u}
+        if [[ -n "$options_before_user" ]]; then
+          rewritten_arguments+=("-$options_before_user")
+        fi
+        if [[ -z "$options_after_user" ]]; then
+          skip_next=1
+        fi
+      else
+        rewritten_arguments+=("$argument")
+      fi
+      ;;
+    *)
+      rewritten_arguments+=("$argument")
+      ;;
+  esac
+done
+
+exec "$gpg_bin" --local-user "$signing_fingerprint" "${rewritten_arguments[@]}"

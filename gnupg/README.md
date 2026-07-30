@@ -12,11 +12,10 @@ Config only - private keys and keyrings live in `~/.gnupg` and are NEVER tracked
 ## What's here
 
 - `gpg.conf` -> `~/.gnupg/gpg.conf` - strong algorithm preferences (AES256, SHA512), long key-id/fingerprint display, and tidy output.
-- `gpg-agent.conf` -> `~/.gnupg/gpg-agent.conf` - passphrase caching (12h idle / 24h max), and `pinentry-mac` as the macOS GUI passphrase prompt (requires `brew install pinentry-mac`).
-- `gpg-backup.sh` - backup and restore of the full GPG identity (all secret and public keys, ownertrust, revocation certificates).
-  Not symlinked; run it from the repo: `gpg-backup.sh backup <dir>` / `gpg-backup.sh restore <dir>`.
-  A restore onto a fresh machine needs nothing but gpg and the backup folder.
-  The backup contains private keys in plain text, so keep it on encrypted storage.
+- `gpg-agent.conf` -> `~/.gnupg/gpg-agent.conf` - `pinentry-mac`, five-minute idle and fifteen-minute maximum caching, no signing cache, no loopback or external password cache, and no smart-card daemon.
+
+The current daily keyring does not contain the certification private key.
+No certification-key backup is tracked or managed by this repository.
 
 ## Setup note
 
