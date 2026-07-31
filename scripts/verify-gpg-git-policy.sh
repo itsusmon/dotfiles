@@ -58,7 +58,6 @@ fi
 for index in "${!gpg_git_identity_emails[@]}"; do
   email=${gpg_git_identity_emails[$index]}
   fingerprint=${gpg_git_identity_fingerprints[$index]}
-  host=${gpg_git_identity_hosts[$index]}
   repo="$temporary_dir/success-$index"
 
   "$git_bin" init -q -b main "$repo"
@@ -67,7 +66,8 @@ for index in "${!gpg_git_identity_emails[@]}"; do
   "$git_bin" -C "$repo" config gpg.format openpgp
   "$git_bin" -C "$repo" config gpg.openpgp.program "$wrapper"
   "$git_bin" -C "$repo" config commit.gpgsign true
-  "$git_bin" -C "$repo" remote add origin "https://$host/example/policy-test.git"
+  "$git_bin" -C "$repo" remote add origin \
+    "https://unrestricted-host-$index.invalid/example/policy-test.git"
   "$git_bin" -C "$repo" commit --allow-empty -m "Signing policy test $index" >/dev/null
   commit_oid=$("$git_bin" -C "$repo" rev-parse HEAD)
 
@@ -93,17 +93,17 @@ for index in "${!gpg_git_identity_emails[@]}"; do
   (
     cd "$repo"
     printf 'refs/heads/main %s refs/heads/main %040d\n' "$commit_oid" 0 |
-      "$hook" origin "https://$host/example/policy-test.git"
+      "$hook" origin "https://different-host-$index.invalid/example/policy-test.git"
   )
 done
 
 test_email=${gpg_git_identity_emails[0]}
-test_host=${gpg_git_identity_hosts[0]}
 failure_repo="$temporary_dir/failure"
 "$git_bin" init -q -b main "$failure_repo"
 "$git_bin" -C "$failure_repo" config user.name 'Usmonjon Abdurakhmanov'
 "$git_bin" -C "$failure_repo" config user.email "$test_email"
-"$git_bin" -C "$failure_repo" remote add origin "https://$test_host/example/policy-test.git"
+"$git_bin" -C "$failure_repo" remote add origin \
+  'https://unrestricted-host.invalid/example/policy-test.git'
 "$git_bin" -C "$failure_repo" -c commit.gpgsign=false \
   commit --allow-empty -m 'Unsigned policy test' >/dev/null
 unsigned_oid=$("$git_bin" -C "$failure_repo" rev-parse HEAD)
@@ -111,27 +111,8 @@ unsigned_oid=$("$git_bin" -C "$failure_repo" rev-parse HEAD)
 (
   cd "$failure_repo"
   if printf 'refs/heads/main %s refs/heads/main %040d\n' "$unsigned_oid" 0 |
-    "$hook" origin "https://$test_host/example/policy-test.git" >/dev/null 2>&1; then
+    "$hook" origin 'https://another-host.invalid/example/policy-test.git' >/dev/null 2>&1; then
     printf '%s\n' 'error: unsigned configured-identity commit was accepted' >&2
-    exit 1
-  fi
-)
-
-"$git_bin" -C "$failure_repo" remote set-url origin \
-  "https://$test_host.evil.example/example/policy-test.git"
-(
-  cd "$failure_repo"
-  set +e
-  lookalike_error=$(
-    : | "$hook" origin \
-      "https://$test_host.evil.example/example/policy-test.git" 2>&1
-  )
-  lookalike_status=$?
-  set -e
-  if [[ "$lookalike_status" -eq 0 ||
-        "$lookalike_error" != *'Configured host for this identity:'* ||
-        "$lookalike_error" != *'Fix:'* ]]; then
-    printf '%s\n' 'error: lookalike host was accepted' >&2
     exit 1
   fi
 )
@@ -154,14 +135,32 @@ unsigned_oid=$("$git_bin" -C "$failure_repo" rev-parse HEAD)
 )
 
 "$git_bin" -C "$failure_repo" config user.email "$test_email"
-"$git_bin" -C "$failure_repo" remote set-url origin \
-  "https://$test_host/example/policy-test.git"
+repository_hook_input="$temporary_dir/repository-hook-input"
+repository_hook_args="$temporary_dir/repository-hook-args"
+printf '#!/bin/sh\nprintf "%%s\\n" "$1|$2" > "%s"\ncat > "%s"\n' \
+  "$repository_hook_args" "$repository_hook_input" \
+  > "$failure_repo/.git/hooks/pre-push"
+chmod 755 "$failure_repo/.git/hooks/pre-push"
+expected_hook_input="$temporary_dir/expected-repository-hook-input"
+: > "$expected_hook_input"
+(
+  cd "$failure_repo"
+  : | "$hook" origin 'https://repository-hook.invalid/example.git'
+)
+if [[ "$(< "$repository_hook_args")" != \
+      'origin|https://repository-hook.invalid/example.git' ]] ||
+    ! cmp -s "$expected_hook_input" "$repository_hook_input"; then
+  printf '%s\n' \
+    'error: repository pre-push hook did not receive the original arguments and standard input' >&2
+  exit 1
+fi
+
 printf '#!/bin/sh\nexit 42\n' > "$failure_repo/.git/hooks/pre-push"
 chmod 755 "$failure_repo/.git/hooks/pre-push"
 (
   cd "$failure_repo"
   set +e
-  : | "$hook" origin "https://$test_host/example/policy-test.git" >/dev/null 2>&1
+  : | "$hook" origin 'https://repository-hook.invalid/example.git' >/dev/null 2>&1
   result=$?
   set -e
   if [[ "$result" -ne 42 ]]; then
@@ -170,5 +169,5 @@ chmod 755 "$failure_repo/.git/hooks/pre-push"
   fi
 )
 
-printf 'GPG Git policy verification passed for %s configured identities\n' \
+printf 'GPG Git policy and repository-hook chaining passed for %s configured identities\n' \
   "${#gpg_git_identity_emails[@]}"

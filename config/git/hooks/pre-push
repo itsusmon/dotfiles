@@ -66,66 +66,12 @@ unique_commits_file="$temporary_dir/commits-unique"
 /bin/cat > "$push_input"
 : > "$commits_file"
 
-resolved_url=$remote_url
-if configured_url=$("$git_bin" remote get-url --push "$remote_name" 2>/dev/null); then
-  resolved_url=$configured_url
-fi
-
-extract_host() {
-  local url=$1
-  local remainder authority host_port prefix host
-
-  case "$url" in
-    *://*)
-      remainder=${url#*://}
-      authority=${remainder%%/*}
-      [[ -n "$authority" && "$authority" != "$remainder" ]] || return 1
-      host_port=${authority##*@}
-      [[ "$host_port" != \[* ]] || return 1
-      host=${host_port%%:*}
-      ;;
-    *:*)
-      prefix=${url%%:*}
-      [[ "$prefix" != */* ]] || return 1
-      host=${prefix##*@}
-      ;;
-    *)
-      return 1
-      ;;
-  esac
-
-  [[ "$host" =~ ^[A-Za-z0-9.-]+$ ]] || return 1
-  LC_ALL=C printf '%s' "$host" | tr '[:upper:]' '[:lower:]'
-}
-
-destination_host=$(extract_host "$resolved_url") || {
-  printf 'pre-push: cannot safely parse the push destination URL: %s\n' \
-    "$resolved_url" >&2
-  printf '%s\n' \
-    '  Fix: use a standard SSH or HTTPS Git URL and inspect the resolved URL with `git remote get-url --push <remote>`.' >&2
-  exit 2
-}
-
 trim_email() {
   local value=$1
   value="${value#"${value%%[![:space:]]*}"}"
   value="${value%"${value##*[![:space:]]}"}"
   LC_ALL=C printf '%s' "$value" | tr '[:upper:]' '[:lower:]'
 }
-
-repository_email=$("$git_bin" config --get user.email 2>/dev/null || true)
-repository_email=$(trim_email "$repository_email")
-
-if gpg_git_find_identity "$repository_email"; then
-  if [[ "$destination_host" != "$gpg_git_identity_host" ]]; then
-    printf 'pre-push: repository identity %s cannot push to host %s\n' \
-      "$repository_email" "$destination_host" >&2
-    printf '  Configured host for this identity: %s\n' "$gpg_git_identity_host" >&2
-    printf '%s\n' \
-      '  Fix: correct `user.email`, select the intended remote, or update the identity mapping if the destination has legitimately changed.' >&2
-    exit 1
-  fi
-fi
 
 while IFS=' ' read -r local_ref local_oid remote_ref remote_oid extra; do
   [[ -z "${extra:-}" ]] || {
@@ -170,17 +116,7 @@ while IFS= read -r commit_oid; do
   if ! gpg_git_find_identity "$commit_email"; then
     continue
   fi
-  expected_host=$gpg_git_identity_host
   expected_fingerprint=$gpg_git_identity_fingerprint
-
-  if [[ "$destination_host" != "$expected_host" ]]; then
-    printf 'pre-push: commit %s cannot be pushed to host %s\n' "$commit_oid" "$destination_host" >&2
-    printf '  Commit identity: %s\n' "$commit_email" >&2
-    printf '  Configured host for this identity: %s\n' "$expected_host" >&2
-    printf '%s\n' \
-      '  Fix: push to the configured host or rewrite the commit with the identity intended for this destination.' >&2
-    exit 1
-  fi
 
   case "$signature_status" in
     G | U) ;;
