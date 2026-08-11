@@ -117,6 +117,37 @@ unsigned_oid=$("$git_bin" -C "$failure_repo" rev-parse HEAD)
   fi
 )
 
+rebased_repo="$temporary_dir/rebased"
+"$git_bin" init -q -b main "$rebased_repo"
+"$git_bin" -C "$rebased_repo" config user.name 'Usmonjon Abdurakhmanov'
+"$git_bin" -C "$rebased_repo" config user.email "$test_email"
+"$git_bin" -C "$rebased_repo" remote add origin \
+  'https://unrestricted-host.invalid/example/rebased-policy-test.git'
+GIT_AUTHOR_NAME='Other Developer' GIT_AUTHOR_EMAIL='other@example.com' \
+  "$git_bin" -C "$rebased_repo" -c commit.gpgsign=false \
+  commit --allow-empty -m 'Other developer commit replayed by rebase' >/dev/null
+rebased_oid=$("$git_bin" -C "$rebased_repo" rev-parse HEAD)
+(
+  cd "$rebased_repo"
+  printf 'refs/heads/main %s refs/heads/main %040d\n' "$rebased_oid" 0 |
+    "$hook" origin 'https://another-host.invalid/example/rebased-policy-test.git'
+)
+"$git_bin" -C "$rebased_repo" config gpg.verifyAllAuthors false
+(
+  cd "$rebased_repo"
+  printf 'refs/heads/main %s refs/heads/main %040d\n' "$rebased_oid" 0 |
+    "$hook" origin 'https://another-host.invalid/example/rebased-policy-test.git'
+)
+"$git_bin" -C "$rebased_repo" config gpg.verifyAllAuthors true
+(
+  cd "$rebased_repo"
+  if printf 'refs/heads/main %s refs/heads/main %040d\n' "$rebased_oid" 0 |
+    "$hook" origin 'https://another-host.invalid/example/rebased-policy-test.git' >/dev/null 2>&1; then
+    printf '%s\n' 'error: unsigned foreign-authored commit was accepted with gpg.verifyAllAuthors enabled' >&2
+    exit 1
+  fi
+)
+
 "$git_bin" -C "$failure_repo" config user.email other@example.com
 (
   cd "$failure_repo"

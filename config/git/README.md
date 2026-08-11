@@ -39,7 +39,15 @@ Configuration and policy failures include the rejected value, configuration path
 The installer places `gpg-git-sign` in `~/.local/bin`, which must be present in `PATH`.
 
 Push destinations are deliberately unrestricted.
-The wrapper selects a signing subkey from the repository's effective `user.email`, and the pre-push hook validates each configured committer email against its exact signing subkey.
+The wrapper selects a signing subkey from the repository's effective `user.email`, and the pre-push hook validates commits authored with each configured email against its exact signing subkey.
+Commits authored by other people are ignored even when a rebase records you as the committer.
+Set `gpg.verifyAllAuthors` to `true` in a repository to require valid known OpenPGP signatures from every author:
+
+```sh
+git config gpg.verifyAllAuthors true
+```
+
+Missing and false values keep the default author-only policy.
 
 Setting `core.hooksPath` means Git does not automatically run `.git/hooks/pre-push`.
 The managed global hook explicitly runs an executable repository-level `.git/hooks/pre-push` after its signature checks, with the original remote arguments and pre-push input.

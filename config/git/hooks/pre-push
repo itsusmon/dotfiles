@@ -35,6 +35,21 @@ GPG_GIT_IDENTITIES_PATH=$identities_file
 gpg_git_load_identities
 primary_fingerprint=$GPG_GIT_PRIMARY_FINGERPRINT
 
+set +e
+verify_all_authors=$("$git_bin" config --bool --get gpg.verifyAllAuthors)
+config_status=$?
+set -e
+case "$config_status" in
+  0) ;;
+  1) verify_all_authors=false ;;
+  *)
+    printf '%s\n' 'pre-push: gpg.verifyAllAuthors must be a Git boolean.' >&2
+    printf '%s\n' \
+      '  Fix: run `git config gpg.verifyAllAuthors true` or `git config --unset gpg.verifyAllAuthors`.' >&2
+    exit 2
+    ;;
+esac
+
 temporary_root=${TMPDIR:-/tmp}
 temporary_root=${temporary_root%/}
 if [[ ! -d "$temporary_root" || ! -w "$temporary_root" ]]; then
@@ -99,9 +114,9 @@ while IFS= read -r commit_oid; do
   [[ -n "$commit_oid" ]] || continue
 
   exec 3< <("$git_bin" show --no-ext-diff --no-textconv -s \
-    --format='%ce%x00%G?%x00%GF%x00%GP%x00' "$commit_oid")
-  IFS= read -r -d '' commit_email <&3 || {
-    printf 'pre-push: cannot read committer email for %s\n' "$commit_oid" >&2
+    --format='%ae%x00%G?%x00%GF%x00%GP%x00' "$commit_oid")
+  IFS= read -r -d '' author_email <&3 || {
+    printf 'pre-push: cannot read author email for %s\n' "$commit_oid" >&2
     printf '%s\n' \
       '  Fix: verify that the object is a readable commit with `git cat-file -t <commit>`.' >&2
     exit 1
@@ -111,29 +126,34 @@ while IFS= read -r commit_oid; do
   IFS= read -r -d '' signing_primary <&3 || true
   exec 3<&-
 
-  commit_email=$(trim_email "$commit_email")
+  author_email=$(trim_email "$author_email")
 
-  if ! gpg_git_find_identity "$commit_email"; then
+  configured_identity=false
+  if gpg_git_find_identity "$author_email"; then
+    configured_identity=true
+    expected_fingerprint=$gpg_git_identity_fingerprint
+  elif [[ "$verify_all_authors" != true ]]; then
     continue
   fi
-  expected_fingerprint=$gpg_git_identity_fingerprint
 
   case "$signature_status" in
     G | U) ;;
     *)
       printf 'pre-push: commit %s does not have a valid known OpenPGP signature\n' "$commit_oid" >&2
-      printf '  Commit identity: %s; signature status: %s\n' \
-        "$commit_email" "${signature_status:-<missing>}" >&2
+      printf '  Author identity: %s; signature status: %s\n' \
+        "$author_email" "${signature_status:-<missing>}" >&2
       printf '%s\n' \
-        '  Fix: configure the intended email and signing subkey, then amend and sign the commit before pushing.' >&2
+        '  Fix: have the author sign the commit with a known OpenPGP key before pushing.' >&2
       exit 1
       ;;
   esac
 
+  [[ "$configured_identity" == true ]] || continue
+
   if [[ "$signing_fingerprint" != "$expected_fingerprint" ]]; then
     printf 'pre-push: commit %s used signing subkey %s instead of %s\n' \
       "$commit_oid" "${signing_fingerprint:-<none>}" "$expected_fingerprint" >&2
-    printf '  Commit identity: %s\n' "$commit_email" >&2
+    printf '  Author identity: %s\n' "$author_email" >&2
     printf '%s\n' \
       '  Fix: set the repository email to the intended configured identity, then amend and re-sign the commit.' >&2
     exit 1
