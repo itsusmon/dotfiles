@@ -1,0 +1,16 @@
+#!/bin/bash
+
+set -euo pipefail
+
+git_bin=$(command -v git || true)
+if [[ -z "$git_bin" || ! -x "$git_bin" ]]; then
+  printf '%s\n' 'pre-commit: cannot find an executable git in PATH.' >&2
+  exit 2
+fi
+
+git_common_dir=$("$git_bin" rev-parse --path-format=absolute --git-common-dir)
+repository_hook="$git_common_dir/hooks/pre-commit"
+
+if [[ -x "$repository_hook" && ! "$repository_hook" -ef "$0" ]]; then
+  exec "$repository_hook" "$@"
+fi
