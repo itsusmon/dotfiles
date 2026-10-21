@@ -46,9 +46,6 @@ else
 fi
 unset _java_home_cache
 
-# Disable Claude's built-in servers
-export ENABLE_CLAUDEAI_MCP_SERVERS=false
-
 # Disable Homebrew hints
 export HOMEBREW_NO_ENV_HINTS=1
 . "$HOME/.cargo/env"

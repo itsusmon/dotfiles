@@ -13,7 +13,6 @@ These use the XDG path `~/.config/git/` rather than the legacy `~/.gitconfig`.
 
 - `config` -> `~/.config/git/config` - user identity, OpenPGP signing policy, shared hook path, and `core.autocrlf = input`.
 - `ignore` -> `~/.config/git/ignore` - the global gitignore.
-  Currently ignores `**/.claude/settings.local.json` so machine-local Claude settings never get committed to any repo.
 - `attributes` -> `~/.config/git/attributes` - the global gitattributes.
   Enforces LF line endings for text/source files and marks binaries, so line endings stay consistent across macOS/Linux/Windows checkouts.
 - `signing-identities.sh` -> `~/.config/git/signing-identities.sh` - the shared declarative mapping from repository email to exact signing subkey.

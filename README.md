@@ -14,11 +14,10 @@ Each tool has its own README with what it is, why it's used, and how the config 
 | [Neovim](config/nvim/README.md) | Main text editor plus a locally built macOS Finder launcher | `config/nvim/` |
 | [Vim / IdeaVim](config/vim/README.md) | Shared Vim config for real Vim + JetBrains IDEs | `config/vim/` |
 | [Git](config/git/README.md) | Version control identity + line-ending / ignore policy | `config/git/` |
-| [OpenCode](config/opencode/README.md) | Terminal AI coding agent | `config/opencode/` |
 | [Gradle](gradle/README.md) | Global JVM / Android build tuning | `gradle/` |
 | [SSH](ssh/README.md) | SSH client config (private keys stay untracked) | `ssh/` |
 | [GnuPG](gnupg/README.md) | GPG signing / encryption defaults (keys untracked) | `gnupg/` |
-| [Agent instructions](AGENTS.md) | Shared AI-agent rules (Claude / Gemini / OpenCode / Codex) | `AGENTS.md` |
+| [Agent instructions](AGENTS.md) | Shared AI-agent rules (Gemini / Codex) | `AGENTS.md` |
 
 ## How it works
 
@@ -62,11 +61,10 @@ config/git/                    → ~/.config/git/config, ignore, attributes
 config/ghostty/config          → ~/.config/ghostty/config
 config/nvim/                   → ~/.config/nvim/ (lua config; lazy-lock.json stays app-managed)
 config/vim/                    → ~/.config/vim/ (vimrc + colors) and ~/.config/ideavim/ideavimrc (mirrors the nvim setup)
-config/opencode/               → ~/.config/opencode/opencode.jsonc, tui.json
 gradle/gradle.properties       → ~/.gradle/gradle.properties
 ssh/config                     → ~/.ssh/config
 gnupg/gpg.conf, gpg-agent.conf → ~/.gnupg/gpg.conf, ~/.gnupg/gpg-agent.conf
-AGENTS.md                      → ~/.claude/CLAUDE.md, ~/.gemini/GEMINI.md, ~/.config/opencode/AGENTS.md, ~/.codex/AGENTS.md, ~/AGENTS.md
+AGENTS.md                      → ~/.gemini/GEMINI.md, ~/.codex/AGENTS.md, ~/AGENTS.md
 scripts/bin/*                  → ~/.local/bin/*
 config/nvim/launcher/*         → source for locally built ~/Applications/Nvim.app
 ```

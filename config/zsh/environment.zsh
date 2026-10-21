@@ -24,7 +24,6 @@ path=(
   "$HOME/.local/bin"
   "$HOME/.fzf/bin"
   "$HOME/.lmstudio/bin"
-  "$HOME/.opencode/bin"
   "$ANDROID_HOME/tools"
   "$ANDROID_HOME/tools/bin"
   "$ANDROID_HOME/platform-tools"
