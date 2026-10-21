@@ -1,6 +1,10 @@
 .backups/
 .DS_Store
 
+# Python bytecode from running scripts/*.py
+__pycache__/
+*.pyc
+
 # ── Never commit secrets ──────────────────────────────────────────────────
 # Defense in depth: even if a key file is ever copied into this repo by
 # accident, git will refuse to stage it. Only config files are tracked.
