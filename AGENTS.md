@@ -19,7 +19,7 @@ These are common instructions for Usmon's agents across all scenarios.
   If you see one, even if it is not caused by what you are working on right now, still get it fixed.
 * Never assume generated or modified code works without verification.
   If behavior is uncertain, write and run the smallest practical test or reproduction needed to confirm that the code works as expected, including relevant edge cases.
-* When running a command only to verify that code compiles or builds, use the command's native `--quiet` option or closest reliable equivalent.
+* When running a command only to verify that code compiles or builds, use the command's native `--quiet --warning-mode=none` option or closest reliable equivalent.
   If no suitable quiet mode exists, run it through `quiet-build`, which suppresses successful output, prints `BUILD SUCCESSFUL` only after a successful exit, and displays the complete captured output when the command fails.
   Do not redirect build output directly to `/dev/null`, because failure diagnostics must remain available.
   Do not use `quiet-build` for interactive commands, commands requiring live output, or checks where warnings from a successful build must be reviewed.
@@ -89,3 +89,8 @@ Lazy code without its check is unfinished.
 Non-trivial logic (a branch, a loop, a parser, a money/auth path) leaves ONE runnable check behind: the smallest test that fails if the logic breaks.
 No frameworks, no fixtures, no per-function suites unless asked.
 Trivial one-liners need no test; YAGNI applies to tests too.
+
+## Project-specific instructions
+
+* For `/Users/usmon/Projects/SQB/Main`, never launch the Android app on an emulator.
+  This project does not run on emulators.
