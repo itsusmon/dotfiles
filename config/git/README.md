@@ -18,6 +18,7 @@ These use the XDG path `~/.config/git/` rather than the legacy `~/.gitconfig`.
   Enforces LF line endings for text/source files and marks binaries, so line endings stay consistent across macOS/Linux/Windows checkouts.
 - `signing-identities.sh` -> `~/.config/git/signing-identities.sh` - the shared declarative mapping from repository email to exact signing subkey.
 - `hooks/pre-push` -> `~/.config/git/hooks/pre-push` - validates Usmonjon's commit signatures, then chains repository-local hooks.
+- `hooks/commit-msg` -> `~/.config/git/hooks/commit-msg` - rejects any commit message with a co-author trailer, then chains the repository-local hook.
 - `../../scripts/bin/gpg-git-sign` -> `~/.local/bin/gpg-git-sign` - selects the exact configured signing subkey from the repository email.
 
 ## Adding a signing identity
@@ -54,3 +55,19 @@ The managed global hook explicitly runs an executable repository-level `.git/hoo
 It then runs an executable `pre-push.local` beside the managed hook.
 A nonzero exit from any of these hooks blocks the push.
 Do not set a repository-local `core.hooksPath`, because it overrides the global path and prevents the managed dispatcher from running.
+
+## Co-author trailers
+
+AI coding agents keep adding `Co-Authored-By: <model> <noreply@...>` trailers, and no commit on this machine may contain one.
+The global `commit-msg` hook rejects a message when any line starts, after optional whitespace, with a co-author trailer in any capitalisation, such as `Co-authored-by:`, `Co-Authored-By :`, or `co-author:`.
+Prose that only mentions co-authors is accepted.
+Comment lines and everything below the `git commit -v` scissors line are ignored, because Git strips them before creating the commit.
+The hook never edits the message; it only accepts or rejects it, and its error tells the committer, human or agent, to rewrite the message.
+It applies to `git commit`, `git commit --amend`, and merge commits.
+After the check passes, it runs an executable repository-level `.git/hooks/commit-msg`, whose failure still blocks the commit.
+
+Limits:
+
+- `git commit --no-verify` skips it.
+- It does not apply to commits made in GitHub's web UI or on other machines.
+- Rebase and cherry-pick of existing commits do not re-run `commit-msg`, so old trailers survive them.

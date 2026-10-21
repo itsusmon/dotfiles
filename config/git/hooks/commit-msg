@@ -1,0 +1,72 @@
+#!/bin/sh
+#
+# Reject any commit message that contains a co-author trailer, then chain
+# the repository's own commit-msg hook.
+
+set -eu
+
+git_bin=$(command -v git || true)
+if [ -z "$git_bin" ] || [ ! -x "$git_bin" ]; then
+  printf '%s\n' 'commit-msg: cannot find an executable git in PATH.' >&2
+  exit 2
+fi
+
+message_file=${1:-}
+if [ -z "$message_file" ] || [ ! -r "$message_file" ]; then
+  printf 'commit-msg: commit message file is missing or unreadable: %s\n' \
+    "${message_file:-<none>}" >&2
+  printf '%s\n' '  Fix: invoke this as a Git commit-msg hook, or pass a message file when testing manually.' >&2
+  exit 2
+fi
+
+# Git strips comment lines and everything below the `git commit -v` scissors
+# line, so neither can end up in the commit. "auto" picks a comment character
+# per commit, so any single character is accepted before the scissors there.
+comment=$("$git_bin" config --get core.commentString ||
+  "$git_bin" config --get core.commentChar || printf '#')
+
+offending=$(awk -v comment="$comment" '
+  BEGIN { cut = "------------------------ >8 ------------------------" }
+  comment == "auto" && length($0) > 2 && substr($0, 2) == " " cut { exit }
+  comment != "auto" && $0 == comment " " cut { exit }
+  comment != "auto" && index($0, comment) == 1 { next }
+  tolower($0) ~ /^[[:space:]]*co[-_ ]?author(ed)?([-_ ]by)?[[:space:]]*:/ {
+    printf "  line %d: %s\n", NR, $0
+  }
+' "$message_file")
+
+if [ -n "$offending" ]; then
+  cat >&2 <<'EOF'
+
+COMMIT REJECTED: commit messages must not contain a Co-Authored-By trailer.
+
+WHY: the owner of this machine does not allow co-author trailers in any
+commit, in any repository. AI coding agents keep adding lines such as
+"Co-Authored-By: <model> <noreply@...>", so this hook blocks every one.
+This rule has no exceptions.
+
+HOW TO FIX:
+  1. Delete every co-author line listed below from the commit message.
+  2. If you are an AI agent: also leave out your name, your model, and any
+     other AI attribution, such as a "Generated with ..." line.
+  3. Run the same git command again with the corrected message.
+
+NEVER commit with --no-verify to bypass this hook. Do not work around it in
+any other way either: no other core.hooksPath, no editing or deleting this
+hook, no rewriting the message after the commit. Fix the message instead.
+
+Offending line(s):
+EOF
+  printf '%s\n\n' "$offending" >&2
+  exit 1
+fi
+
+git_common_dir=$("$git_bin" rev-parse --path-format=absolute --git-common-dir)
+repository_hook="$git_common_dir/hooks/commit-msg"
+
+# -ef is not in POSIX test, but every sh Git ships with supports it. It keeps
+# a repository hook that links back to this file from recursing forever.
+# shellcheck disable=SC3013
+if [ -x "$repository_hook" ] && [ ! "$repository_hook" -ef "$0" ]; then
+  exec "$repository_hook" "$@"
+fi
