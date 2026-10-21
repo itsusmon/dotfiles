@@ -17,6 +17,7 @@ Each tool has its own README with what it is, why it's used, and how the config 
 | [Gradle](gradle/README.md) | Global JVM / Android build tuning | `gradle/` |
 | [SSH](ssh/README.md) | SSH client config (private keys stay untracked) | `ssh/` |
 | [GnuPG](gnupg/README.md) | GPG signing / encryption defaults (keys untracked) | `gnupg/` |
+| [Mac scripts](scripts/README.md) | Battery cycle statistics | `scripts/bin/cycle` |
 | [Agent instructions](AGENTS.md) | Shared AI-agent rules (Gemini / Codex) | `AGENTS.md` |
 
 ## How it works

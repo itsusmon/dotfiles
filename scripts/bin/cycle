@@ -1,0 +1,35 @@
+#!/bin/bash
+# cycle - show Mac activation date, battery cycle count, cycles per day, and average time per cycle.
+#
+# "Activation date" is approximated by the creation time of /var/db/.AppleSetupDone,
+# which macOS creates when Setup Assistant completes on first boot.
+
+set -euo pipefail
+
+setup_epoch=$(stat -f "%B" /var/db/.AppleSetupDone 2>/dev/null) || {
+    echo "error: cannot read /var/db/.AppleSetupDone" >&2
+    exit 1
+}
+
+cycles=$(ioreg -r -c AppleSmartBattery | awk -F' = ' '/^[[:space:]|]*"CycleCount" =/ && !found {print $2; found=1}')
+if [[ -z "$cycles" ]]; then
+    echo "error: could not read battery cycle count" >&2
+    exit 1
+fi
+
+now=$(date +%s)
+days=$(( (now - setup_epoch) / 86400 ))
+per_day=$(awk -v c="$cycles" -v s="$setup_epoch" -v n="$now" \
+    'BEGIN { printf "%.5f", c / ((n - s) / 86400) }' | sed -E 's/0+$//; s/\.$//')
+
+per_cycle=$(awk -v c="$cycles" -v s="$setup_epoch" -v n="$now" \
+    'BEGIN {
+        if (c <= 0) { printf "N/A"; exit }
+        t = int((n - s) / c)
+        printf "%dw %dd %dh %dm %ds", int(t / 604800), int(t / 86400) % 7, int(t / 3600) % 24, int(t / 60) % 60, t % 60
+    }')
+
+printf "Activated:      %s (%s days ago)\n" "$(date -r "$setup_epoch" "+%b %d %Y %H:%M")" "$days"
+printf "Battery cycles: %s\n" "$cycles"
+printf "Cycles/day:     %s\n" "$per_day"
+printf "Time/cycle:     %s\n" "$per_cycle"

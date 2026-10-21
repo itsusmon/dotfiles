@@ -1,0 +1,365 @@
+#!/bin/bash
+# Compatible with the Bash 3.2 shipped with macOS.
+set -uo pipefail
+SECONDS=0
+
+mode=update
+verbose=0
+while (( $# )); do
+case "$1" in
+  --check|--dry-run)
+    [[ $mode == update ]] || { printf 'Choose either --check or --dry-run.\n' >&2; exit 2; }
+    if [[ $1 == --check ]]; then mode=check; else mode=preview; fi ;;
+  --verbose) verbose=1 ;;
+  --help|-h)
+    cat <<'EOF'
+Usage: update [--check | --dry-run] [--verbose]
+
+Update installed developer tools and supported desktop apps.
+  --check    Check availability without installing updates. Metadata may refresh.
+  --dry-run  Show selected steps without executing them or using the network.
+  --verbose  Stream full tool output instead of compact status lines.
+
+Missing tools are skipped. Failed steps do not stop later steps.
+Exit: 0 completed, 1 one or more steps failed, 2 invalid usage, 130 interrupted.
+Tools without a safe automated path are reported as MANUAL, never as up to date.
+Run as your normal user. Project dependencies and exact version pins stay intact.
+EOF
+    exit 0 ;;
+  *) printf 'Unknown option: %s\n' "$1" >&2; exit 2 ;;
+esac
+shift
+done
+[[ $(uname -s) == Darwin ]] || { printf 'This script supports macOS.\n' >&2; exit 2; }
+[[ $EUID != 0 ]] || { printf 'Run update as your normal user, not with sudo.\n' >&2; exit 2; }
+trap 'total_elapsed=$SECONDS; printf "⏱ Total time: %sm %ss\n" "$((total_elapsed / 60))" "$((total_elapsed % 60))"' EXIT
+stop_tree() {
+  local pid=$1 child children
+  # Freeze parents first so a cancelled helper cannot start another update.
+  kill -STOP "$pid" 2>/dev/null || return 0
+  cancelled_pids+=("$pid")
+  cancelled_starts+=("$(/bin/ps -p "$pid" -o lstart= 2>/dev/null)")
+  children=$(/usr/bin/pgrep -P "$pid") || children=
+  for child in $children; do stop_tree "$child"; done
+}
+
+cancel() {
+  local status=$1 pid index started
+  trap '' INT TERM
+  printf '\nCancelling active step...\n' >&2
+  cancelled_pids=() cancelled_starts=()
+  # jobs also finds a worker interrupted between launch and assigning $!.
+  for pid in $(jobs -pr); do stop_tree "$pid"; done
+  if (( ${#cancelled_pids[@]} )); then
+    kill -TERM "${cancelled_pids[@]}" 2>/dev/null || :
+    kill -CONT "${cancelled_pids[@]}" 2>/dev/null || :
+    /bin/sleep 1
+    for ((index=0; index<${#cancelled_pids[@]}; index++)); do
+      pid=${cancelled_pids[index]}
+      started=$(/bin/ps -p "$pid" -o lstart= 2>/dev/null) || continue
+      # Check identity before escalation so a reused PID is not targeted.
+      if [[ -n $started && $started == "${cancelled_starts[index]}" ]]; then
+        kill -KILL "$pid" 2>/dev/null || :
+      fi
+    done
+    wait 2>/dev/null || :
+  fi
+  printf '🛑 Cancelled; no further updates will run.\n' >&2
+  [[ -z ${log_dir:-} ]] || printf '📄 Logs: %s\n' "$log_dir" >&2
+  exit "$status"
+}
+trap 'cancel 130' INT
+trap 'cancel 143' TERM
+
+# Follow the install.sh symlink to find the companion scripts.
+script=${BASH_SOURCE[0]}
+while [[ -L $script ]]; do
+  directory=$(cd -P "$(dirname "$script")" && pwd) || exit 1
+  script=$(readlink "$script") || exit 1
+  [[ $script == /* ]] || script=$directory/$script
+done
+support=$(cd -P "$(dirname "$script")/.." && pwd) || exit 1
+cd "$HOME" || exit 1
+export NVM_DIR=${NVM_DIR:-$HOME/.nvm}
+export HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_CLEANUP=1 HOMEBREW_NO_ASK=1
+export GIT_TERMINAL_PROMPT=0
+export npm_config_loglevel=warn npm_config_fund=false npm_config_update_notifier=false
+passed=0 skipped=0 planned=0
+failures=()
+log_dir=
+step=0
+if [[ $mode != preview ]]; then
+  log_dir=$(umask 077; mktemp -d "${TMPDIR:-/tmp}/update.XXXXXXXX") || exit 1
+fi
+have() { command -v "$1" >/dev/null 2>&1; }
+brew_owned() {
+  local location link
+  location=$(command -v "$1") || return 1
+  while [[ -L $location ]]; do
+    link=$(readlink "$location") || return 1
+    if [[ $link == /* ]]; then location=$link; else location=$(dirname "$location")/$link; fi
+  done
+  case $location in */Cellar/*|*/Caskroom/*) return 0 ;; *) return 1 ;; esac
+}
+skip() { printf '⏭  %s\n' "$*"; skipped=$((skipped + 1)); }
+manual() { printf '🖐  %s\n' "$*"; skipped=$((skipped + 1)); }
+
+show_log() {
+  # Remove terminal control sequences and normalize progress-bar carriage returns.
+  tr '\r' '\n' < "$1" | sed -E $'s/\033\\[[0-9;?]*[[:alpha:]]//g; /^[[:space:]]*$/d; s/^/    /'
+}
+
+report() { run "$1" --report "${@:2}"; }
+
+run() {
+  local label=$1 status worker logfile reporting=0 started=$SECONDS
+  shift
+  if [[ ${1:-} == --report ]]; then reporting=1; shift; fi
+  if [[ $mode == preview ]]; then
+    printf '📋 %s\n' "$label"
+    planned=$((planned + 1))
+    return
+  fi
+  step=$((step + 1))
+  logfile=$log_dir/$(printf '%02d-%s' "$step" "$label" | LC_ALL=C tr '[:upper:]' '[:lower:]' |
+    sed -E 's/[^a-z0-9]+/-/g; s/^-//; s/-$//').log
+  printf '🔄 %s…' "$label"
+  if [[ ! -t 1 || $verbose == 1 ]]; then printf '\n'; fi
+  # Bash handles traps immediately during wait, unlike a foreground command.
+  # Keep stdin attached so tools that need terminal input still work.
+  if (( verbose )); then
+    ( "$@" 2>&1 | tee "$logfile" ) <&0 &
+  else
+    ( "$@" ) <&0 >"$logfile" 2>&1 &
+  fi
+  worker=$!
+  wait "$worker"
+  status=$?
+  if [[ -t 1 && $verbose == 0 ]]; then printf '\r\033[K'; fi
+  case $status in
+    0) printf '✅ %s · %ss\n' "$label" "$((SECONDS - started))"
+       passed=$((passed + 1))
+       if [[ $verbose == 0 && ( $mode == check || $reporting == 1 ) ]]; then
+         if [[ -s $logfile ]]; then show_log "$logfile"; else printf '    No available updates reported.\n'; fi
+       elif (( ! verbose )); then
+         sed -n -e 's/^\[SKIP\] /    ⏭  /p' -e 's/^\[MANUAL\] /    🖐  /p' "$logfile"
+       fi ;;
+    130|143) exit "$status" ;;
+    *) printf '❌ %s · exit %s · %ss (continuing)\n' "$label" "$status" "$((SECONDS - started))" >&2
+       if (( ! verbose )); then show_log "$logfile" | tail -n 8 >&2; fi
+       printf '    Full output: %s\n' "$logfile" >&2
+       failures+=("$label") ;;
+  esac
+  return 0
+}
+
+git_update() {
+  local repo=$1 changes
+  changes=$(git -C "$repo" status --porcelain) || return
+  [[ -z $changes ]] || { printf 'Local changes in %s; refusing to overwrite them.\n' "$repo" >&2; return 1; }
+  git -C "$repo" pull --ff-only
+}
+
+git_check() {
+  local repo=$1 branch remote ref local_head remote_head
+  branch=$(git -C "$repo" symbolic-ref --quiet --short HEAD) || {
+    printf 'Detached or pinned checkout: %s; no branch comparison.\n' "$repo"; return 0;
+  }
+  remote=$(git -C "$repo" config --get "branch.$branch.remote") || return
+  ref=$(git -C "$repo" config --get "branch.$branch.merge") || return
+  local_head=$(git -C "$repo" rev-parse HEAD) || return
+  remote_head=$(git -C "$repo" ls-remote --exit-code "$remote" "$ref") || return
+  remote_head=${remote_head%%[[:space:]]*}
+  if [[ $local_head == "$remote_head" ]]; then printf 'Up to date: %s\n' "$repo"
+  else printf 'Remote differs: %s (may be ahead or diverged; update uses fast-forward only)\n' "$repo"; fi
+}
+
+nvm_release() {
+  local latest current changes
+  latest=$(git -C "$NVM_DIR" ls-remote --tags --refs origin 'v*' |
+    awk '{sub("refs/tags/v", "", $2); if ($2 ~ /^[0-9]+\.[0-9]+\.[0-9]+$/) print $2}' |
+    sort -t. -k1,1nr -k2,2nr -k3,3nr | sed -n '1p') || return
+  [[ -n $latest ]] || { printf 'No NVM release found.\n' >&2; return 1; }
+  current=$(git -C "$NVM_DIR" describe --tags --exact-match 2>/dev/null) || current=custom-checkout
+  printf 'NVM installed: %s; latest release: v%s\n' "$current" "$latest"
+  [[ $mode == check || $current == "v$latest" ]] && return 0
+  # Only advance release checkouts; never replace a user's development branch.
+  [[ $current != custom-checkout ]] || { printf 'Custom NVM checkout; update it manually.\n' >&2; return 1; }
+  changes=$(git -C "$NVM_DIR" status --porcelain) || return
+  [[ -z $changes ]] || { printf 'NVM has local changes.\n' >&2; return 1; }
+  git -C "$NVM_DIR" fetch origin "tag" "v$latest" && git -C "$NVM_DIR" checkout --detach "v$latest"
+}
+
+with_node() {
+  # NVM is not nounset-safe. Source it only inside run's isolated subshell.
+  set +u
+  if [[ -s $NVM_DIR/nvm.sh ]]; then
+    # shellcheck disable=SC1091
+    . "$NVM_DIR/nvm.sh" --no-use || return
+    nvm use --silent default || return
+  fi
+  "$@"
+}
+
+node_release() {
+  local old major latest
+  old=$(nvm current) || return
+  [[ $old == v[0-9]* ]] || { printf 'NVM default is not a Node release.\n' >&2; return 1; }
+  major=${old%%.*}
+  latest=$(nvm version-remote "$major") || return
+  [[ $latest == v[0-9]* ]] || return 1
+  printf 'Node installed: %s; newest in same major: %s\n' "$old" "$latest"
+  [[ $mode == check || $old == "$latest" ]] && return 0
+  # The alias is intentionally left untouched, including exact version pins.
+  if [[ $(cat "$NVM_DIR/alias/default") == "$old" || $(cat "$NVM_DIR/alias/default") == "${old#v}" ]]; then
+    printf 'Exact default version pin retained.\n'; return 0
+  fi
+  nvm install "$latest" --reinstall-packages-from="$old"
+}
+
+fzf_update() {
+  local backup status
+  git_update "$HOME/.fzf" || return
+  backup=$(mktemp -d) || return
+  # The upstream installer removes an older binary before downloading its replacement.
+  if [[ -e $HOME/.fzf/bin/fzf || -L $HOME/.fzf/bin/fzf ]]; then
+    cp -pP "$HOME/.fzf/bin/fzf" "$backup/fzf" || { rmdir "$backup"; return 1; }
+  fi
+  "$HOME/.fzf/install" --bin
+  status=$?
+  if (( status != 0 )) && [[ -e $backup/fzf || -L $backup/fzf ]]; then
+    mv -f "$backup/fzf" "$HOME/.fzf/bin/fzf" || return 1
+    printf 'Restored the previous fzf binary after the failed installation.\n' >&2
+  fi
+  rm -rf "$backup"
+  return "$status"
+}
+
+rust_check() {
+  local status
+  rustup check
+  status=$?
+  [[ $status == 100 ]] && return 0
+  return "$status"
+}
+
+command_line_tools() {
+  local listing labels label status result=0
+  listing=$(LC_ALL=C softwareupdate --list 2>&1)
+  status=$?
+  if (( status != 0 )); then printf '%s\n' "$listing" >&2; return "$status"; fi
+  # Only exact CLT label prefixes qualify; never pass --all or --restart.
+  labels=$(printf '%s\n' "$listing" |
+    sed -n 's/^[[:space:]]*\* Label: \(Command Line Tools for Xcode[^[:cntrl:]]*\)$/\1/p')
+  if [[ -z $labels ]]; then printf 'Command Line Tools are up to date.\n'; return 0; fi
+  while IFS= read -r label; do
+    printf '%s\n' "$label"
+    [[ $mode == check ]] && continue
+    sudo "$(command -v softwareupdate)" --install "$label"
+    status=$?
+    case $status in
+      0) ;;
+      130|143) return "$status" ;;
+      *) result=1 ;;
+    esac
+  done <<< "$labels"
+  return "$result"
+}
+
+printf '\n🛠  Tools and apps · %s\n\n' "$mode"
+if have brew; then
+  if [[ $mode == check ]]; then
+    report 'Homebrew available updates' brew outdated --verbose --greedy
+  else
+    run 'Homebrew metadata' brew update
+    run 'Homebrew formulae' brew upgrade --formula
+    run 'Homebrew desktop apps' brew upgrade --cask --greedy
+  fi
+else skip 'Homebrew: not installed'; fi
+
+if [[ -d $NVM_DIR/.git ]]; then run 'NVM release' nvm_release; fi
+if [[ -s $NVM_DIR/nvm.sh ]]; then run 'Node in the existing major version' with_node node_release; fi
+if have npm || [[ -s $NVM_DIR/nvm.sh ]]; then
+  if [[ $mode == check ]]; then
+    run 'npm global package availability' with_node node "$support/update-node.mjs" npm-check
+  else
+    run 'npm global packages' with_node node "$support/update-node.mjs" npm-update
+  fi
+  run 'Corepack-managed package managers' with_node node "$support/update-node.mjs" "corepack-$mode"
+  run 'Global skills' with_node node "$support/update-node.mjs" "skills-$mode"
+else skip 'Node package managers and skills: npm not installed'; fi
+
+if have rustup; then
+  if [[ $mode == check ]]; then run 'Rust toolchains and Rustup' rust_check
+  else run 'Rust toolchains, Cargo and Rustup' rustup update; fi
+else skip 'Rustup: not installed'; fi
+if have cargo-install-update; then
+  if [[ $mode == check ]]; then run 'Cargo applications' cargo-install-update --all --list
+  else run 'Cargo applications' cargo-install-update --all; fi
+elif [[ -s ${CARGO_HOME:-$HOME/.cargo}/.crates.toml ]]; then
+  manual 'Cargo applications: cargo-update is not installed; no packages were reinstalled with guessed features.'
+fi
+
+if have android; then
+  if [[ $mode == check ]]; then
+    if ! brew_owned android; then manual 'Standalone Android CLI: no verified read-only release check.'; fi
+    manual 'Android SDK: inspect available revisions with android sdk list --all.'
+  else
+    if ! brew_owned android; then run 'Android CLI' android update; fi
+    run 'Android SDK packages' android sdk update
+  fi
+else skip 'Android CLI: not installed'; fi
+if have nextdns && ! brew_owned nextdns; then
+  if [[ $mode == check ]]; then manual 'Standalone NextDNS: use its installer to check the release.'
+  else run 'Standalone NextDNS' nextdns upgrade; fi
+fi
+
+for repo in "$HOME/.zsh/zsh-autosuggestions" "$HOME/.zsh/zsh-completions" "$HOME/.zsh/zsh-syntax-highlighting"; do
+  [[ -d $repo/.git ]] || continue
+  if [[ $mode == check ]]; then run "Shell plugin: ${repo##*/}" git_check "$repo"
+  else run "Shell plugin: ${repo##*/}" git_update "$repo"; fi
+done
+if [[ -d $HOME/.fzf/.git ]]; then
+  if [[ $mode == check ]]; then run 'Git-installed fzf' git_check "$HOME/.fzf"
+  else run 'Git-installed fzf and its binary' fzf_update; fi
+fi
+
+if have nvim; then
+  for component in lazy mason treesitter; do
+    if [[ $mode == check ]]; then
+      if [[ $component == treesitter ]]; then manual 'Tree-sitter parsers: checked against plugin definitions when updating; check mode leaves parsers untouched.'; continue; fi
+      run "Neovim $component availability" env UPDATE_NVIM_COMPONENT="$component" UPDATE_MODE=check UPDATE_NVIM_HELPER="$support/update-nvim.lua" nvim --headless -u NONE -i NONE -c 'lua dofile(vim.env.UPDATE_NVIM_HELPER)'
+    else
+      run "Neovim $component" env UPDATE_NVIM_COMPONENT="$component" UPDATE_MODE=update UPDATE_NVIM_HELPER="$support/update-nvim.lua" nvim --headless -i NONE -c 'lua dofile(vim.env.UPDATE_NVIM_HELPER)'
+    fi
+  done
+fi
+for tool in nvim bat zmx; do
+  have "$tool" || continue
+  location=$(command -v "$tool")
+  case $location in "$HOME"/.local/*) manual "$tool binary: standalone installation at $location; update from its release installer." ;; esac
+done
+
+if have pipx; then
+  if [[ $mode == check ]]; then manual 'pipx: no bulk read-only update check.'
+  else run 'pipx applications' pipx upgrade-all; fi
+fi
+if have uv; then
+  if [[ $mode == check ]]; then manual 'uv tools: no bulk read-only update check.'
+  else run 'uv applications' uv tool upgrade --all; fi
+fi
+if [[ -x $HOME/.local/share/python/bin/python3 ]]; then
+  run 'Python packages' "$HOME/.local/share/python/bin/python3" "$support/update-python.py" "$mode"
+elif have python3; then
+  run 'Python user packages' python3 "$support/update-python.py" "$mode"
+fi
+if have softwareupdate; then run 'Apple Command Line Tools' command_line_tools; fi
+if have mas; then
+  if [[ $mode == check ]]; then report 'App Store available updates (including Xcode)' mas outdated
+  else run 'App Store apps (including Xcode)' mas upgrade; fi
+fi
+printf '\n🏁 %s completed · %s failed · %s skipped/manual' "$passed" "${#failures[@]}" "$skipped"
+if [[ $mode == preview ]]; then printf ' · %s planned' "$planned"; fi
+printf '\n'
+[[ -z $log_dir ]] || printf '📄 Logs: %s\n' "$log_dir"
+if (( ${#failures[@]} )); then printf '❌ Failed: %s\n' "${failures[@]}"; exit 1; fi

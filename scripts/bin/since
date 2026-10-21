@@ -1,0 +1,132 @@
+#!/usr/bin/env python3
+"""Print the absolute difference between a casually written local date and now."""
+
+import argparse
+import re
+from datetime import date, datetime, timedelta
+
+
+MONTHS = {
+    name: month
+    for month, names in enumerate(
+        (
+            "jan january", "feb february", "mar march", "apr april", "may",
+            "jun june", "jul july", "aug august", "sep sept september",
+            "oct october", "nov november", "dec december",
+        ),
+        1,
+    )
+    for name in names.split()
+}
+
+
+def parse_date(value, today):
+    value = value.strip(" ,").lower()
+    if not value:
+        return today
+    if value in ("today", "yesterday", "tomorrow"):
+        return today + timedelta(days={"today": 0, "yesterday": -1, "tomorrow": 1}[value])
+    value = re.sub(r"(?<=\d)(st|nd|rd|th)\b", "", value)
+    parts = re.split(r"[\s/.,-]+", value)
+    if len(parts) not in (2, 3):
+        raise ValueError("unrecognized date")
+    if len(parts) == 3 and len(parts[0]) == 4 and parts[0].isdigit():
+        year, month, day = parts
+    else:
+        first, second = parts[:2]
+        if first in MONTHS:
+            month, day = str(MONTHS[first]), second
+        else:
+            day, month = first, str(MONTHS.get(second, second))
+        year = parts[2] if len(parts) == 3 else str(today.year)
+    if not all(part.isascii() and part.isdigit() for part in (year, month, day)):
+        raise ValueError("unrecognized date")
+    if len(year) not in (2, 4) or len(month) > 2 or len(day) > 2:
+        raise ValueError("use a two- or four-digit year and a valid day and month")
+    year = int(year) + (2000 if len(year) == 2 else 0)
+    return date(year, int(month), int(day))
+
+
+# A clock is a trailing token, optionally followed by am/pm or a.m./p.m.
+CLOCK = re.compile(
+    r"(?<!\S)(?P<hour>\d{1,2})(?:[:.](?P<minute>\d{1,2})"
+    r"(?:[:.](?P<second>\d{1,2}))?)?\s*(?P<period>[ap]\.?m\.?)?$",
+    re.IGNORECASE,
+)
+COMPACT_CLOCK = re.compile(r"(?<!\S)(?P<compact>\d{4}|\d{6})$")
+
+
+def parse_input(value, today):
+    value = re.sub(r"(?<=\d)[tT](?=\d)", " ", value.strip())
+    value = re.sub(r"^on\s+", "", value, flags=re.IGNORECASE)
+    if not value:
+        raise ValueError("enter a date or time")
+    try:
+        return parse_date(value, today), None, False
+    except ValueError:
+        pass
+    match = CLOCK.search(value) or COMPACT_CLOCK.search(value)
+    if match is None:
+        raise ValueError("use a day-first date, such as 6-10-26, optionally followed by 12:34")
+    day_text = re.sub(r"\s*\bat\s*$", "", value[:match.start()], flags=re.IGNORECASE)
+    day = parse_date(day_text, today)
+    if "compact" in match.groupdict():
+        clock = match["compact"]
+        hour, minute = int(clock[:2]), int(clock[2:4])
+        second = int(clock[4:]) if len(clock) == 6 else 0
+        has_seconds = len(clock) == 6
+    else:
+        hour, minute, second = (int(match[name] or 0) for name in ("hour", "minute", "second"))
+        has_seconds = match["second"] is not None
+        if match["period"]:
+            if not 1 <= hour <= 12:
+                raise ValueError("am/pm hours must be between 1 and 12")
+            hour = hour % 12 + (12 if match["period"].lower().startswith("p") else 0)
+    target = datetime(day.year, day.month, day.day, hour, minute, second)
+    # Local timestamps honor the timezone and daylight-saving rules for each date.
+    if datetime.fromtimestamp(target.timestamp()) != target:
+        raise ValueError("that local time does not exist because of a daylight-saving change")
+    return day, target, has_seconds
+
+
+def difference(value, now):
+    if value.strip().lower() == "now":
+        return "0 minutes"
+    day, target, has_seconds = parse_input(value, now.date())
+    if target is None:
+        count = abs((now.date() - day).days)
+        return f"{count} day{'s' if count != 1 else ''}"
+    remaining = int(abs(now.timestamp() - target.timestamp()))
+    units = [("day", 86400), ("hour", 3600), ("minute", 60)]
+    if has_seconds:
+        units.append(("second", 1))
+    result = []
+    for name, size in units:
+        count, remaining = divmod(remaining, size)
+        if count:
+            result.append(f"{count} {name}{'s' if count != 1 else ''}")
+    return ", ".join(result) or ("0 seconds" if has_seconds else "0 minutes")
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        epilog=(
+            "Examples: since 6-10-26 | since 6 Oct 2026 at 1:34pm | "
+            "since yesterday 9:05 | since 2026-10-06T12:34:56. "
+            "Numeric dates are day-first (or ISO year-first). Missing years use this year; "
+            "two-digit years mean 2000-2099. Times use your local timezone; "
+            "a time alone means today. Future dates also give a positive difference. "
+            "Durations are rounded down to the smallest supplied unit (minutes or seconds)."
+        ),
+    )
+    parser.add_argument("date", nargs="+", help="date and optional time, quoted or unquoted")
+    args = parser.parse_args()
+    try:
+        print(difference(" ".join(args.date), datetime.now()))
+    except (ValueError, OverflowError, OSError) as error:
+        parser.exit(2, f"since: {error}\n")
+
+
+if __name__ == "__main__":
+    main()
