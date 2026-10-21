@@ -137,13 +137,14 @@ if !has('ide')
   nnoremap <silent> <leader>e :Lexplore<CR>
 
   " ── fzf ─────────────────────────────────────────────────────
-  " fzf is a git install at ~/.fzf, which ships its own Vim plugin. Adding
+  " Resolve the installed fzf binary to locate its bundled Vim plugin. Adding
   " it to 'runtimepath' gives :FZF, fzf#run() and fzf#wrap(). These maps
   " mirror the Neovim Telescope <leader>f… finder. In-editor fzf inherits
   " FZF_DEFAULT_OPTS from the shell, so it already matches the Catppuccin
   " theme configured in ~/.config/zsh/fzf.zsh.
-  if isdirectory(expand('~/.fzf'))
-    set runtimepath+=~/.fzf
+  let s:fzf_root = fnamemodify(resolve(exepath('fzf')), ':h:h')
+  if filereadable(s:fzf_root . '/plugin/fzf.vim')
+    execute 'set runtimepath+=' . fnameescape(s:fzf_root)
     " Centered popup, matching the Neovim/Ghostty aesthetic.
     let g:fzf_layout = { 'window': { 'width': 0.85, 'height': 0.80 } }
 
