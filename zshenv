@@ -35,16 +35,21 @@ export VISUAL='nvim'
 # --- Toolchains ---
 export ANDROID_HOME=/Users/Shared/Library/Android/SDK
 
-# JAVA_HOME (cached to avoid spawning /usr/libexec/java_home each shell)
-_java_home_cache="$HOME/.zsh/cache/.java_home_cache"
-if [[ -s $_java_home_cache ]]; then
-  export JAVA_HOME=$(<$_java_home_cache)
-else
-  export JAVA_HOME=$(/usr/libexec/java_home -v 21)
-  mkdir -p "$HOME/.zsh/cache"
-  echo "$JAVA_HOME" > $_java_home_cache
+# Keep the default on Java 21, using Homebrew's stable path when available.
+# An explicitly selected project/runtime JAVA_HOME takes precedence.
+if [[ -z ${JAVA_HOME:-} ]]; then
+  for _java_prefix in /opt/homebrew /usr/local; do
+    _java_candidate="$_java_prefix/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home"
+    if [[ -x $_java_candidate/bin/java ]]; then
+      export JAVA_HOME=$_java_candidate
+      break
+    fi
+  done
+  if [[ -z ${JAVA_HOME:-} ]]; then
+    export JAVA_HOME=$(/usr/libexec/java_home -v 21 2>/dev/null)
+  fi
+  unset _java_prefix _java_candidate
 fi
-unset _java_home_cache
 
 # Disable Homebrew hints
 export HOMEBREW_NO_ENV_HINTS=1

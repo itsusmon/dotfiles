@@ -14,7 +14,7 @@ The root loaders (`zshenv`, `zshrc`, `zprofile`) are tiny; the real config lives
 - `zshenv` -> `~/.zshenv` - environment variables for ALL shells (XDG dirs, `EDITOR=nvim`, cached `JAVA_HOME`, `ANDROID_HOME`).
   PATH is intentionally NOT set here, because macOS `path_helper` would reorder it afterward.
 - `zshrc` -> `~/.zshrc` - the interactive loader; it sources the modules below in order.
-- `zprofile` -> `~/.zprofile` - login-shell PATH additions from installers (JetBrains Toolbox, Antigravity CLI).
+- `zprofile` -> `~/.zprofile` - login-shell PATH additions for JetBrains Toolbox and standalone user tools.
 
 ## Modules (sourced in this order by zshrc)
 

@@ -9,8 +9,9 @@ if [[ -s "$NVM_DIR/nvm.sh" ]]; then
   _nvm_default_alias="$NVM_DIR/alias/default"
   if [[ -r $_nvm_default_alias ]]; then
     _nvm_alias_val=$(<$_nvm_default_alias)
-    # The alias might be "24" but the dir is "v24.18.0" — use glob to resolve
-    _nvm_resolved_dir=($NVM_DIR/versions/node/v${_nvm_alias_val}*(N[1]))
+    # Choose the newest matching numeric release without loading NVM.
+    _nvm_alias_val=${_nvm_alias_val#v}
+    _nvm_resolved_dir=($NVM_DIR/versions/node/v${_nvm_alias_val}(|.*)(NnOn[1]))
     if [[ -n $_nvm_resolved_dir && -d "$_nvm_resolved_dir/bin" ]]; then
       path=("$_nvm_resolved_dir/bin" $path)
     fi

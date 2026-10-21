@@ -22,12 +22,14 @@ typeset -U path  # keep PATH entries unique (zsh built-in)
 
 path=(
   "$HOME/.local/bin"
-  "$HOME/.fzf/bin"
-  "$HOME/.lmstudio/bin"
   "$ANDROID_HOME/tools"
   "$ANDROID_HOME/tools/bin"
   "$ANDROID_HOME/platform-tools"
   "$HOME/Library/Application Support/JetBrains/Toolbox/scripts"
-  "$HOME/Library/Python/3.9/bin"
   $path
 )
+
+# Default Python packages live separately from Homebrew and project environments.
+if [[ -z ${VIRTUAL_ENV:-} && -z ${CONDA_PREFIX:-} && -x "$HOME/.local/share/python/bin/python3" ]]; then
+  path=("$HOME/.local/share/python/bin" $path)
+fi
